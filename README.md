@@ -8,6 +8,15 @@
   </a>
 </p>
 <p align="center">The open source AI coding agent.</p>
+
+> [!IMPORTANT]
+> **这是一个二次开发（Fork）版本，并非官方原项目。**
+> This repository is a **modified fork**, not the official project.
+>
+> - 原项目 / Original project: [anomalyco/opencode](https://github.com/anomalyco/opencode)（[opencode.ai](https://opencode.ai)）
+> - 本 Fork 基于 MIT 许可发布，保留原版权声明 "Copyright (c) 2025 opencode"。/ This fork remains MIT-licensed and retains the original copyright notice.
+> - 二改内容清单 / Fork modifications: **[FORK.md](./FORK.md)**（非 UTF-8 文件编码支持、桌面端本地 CLI 构建、桌面端侧边栏重设计等 / file-encoding support, local desktop CLI builds, sidebar redesign, etc.）
+
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
