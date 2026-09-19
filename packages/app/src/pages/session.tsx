@@ -2331,6 +2331,10 @@ export default function Page() {
         <Show when={!newSessionDesign() && desktopSidePanelOpen() && !workspaceView().opened()}>
           <Suspense>
             <SessionSidePanel
+              onClose={() => {
+                if (desktopFileTreeOpen()) layout.fileTree.close()
+                if (desktopSessionResizeOpen()) view().reviewPanel.close()
+              }}
               canReview={canReview}
               diffs={reviewDiffs}
               diffsReady={reviewReady}
@@ -2368,6 +2372,10 @@ export default function Page() {
                       reviewHasFocusableContent={() => hasReview() || reviewV2State.sidebarOpened()}
                       reviewCount={reviewCount}
                       reviewPanel={reviewPanelV2}
+                      onClose={() => {
+                        if (desktopFileTreeOpen()) layout.fileTree.close()
+                        if (desktopSessionResizeOpen()) view().reviewPanel.close()
+                      }}
                       reviewSidebarToggle={(disabled) => (
                         <SessionReviewV2SidebarToggle
                           opened={reviewV2State.sidebarOpened()}

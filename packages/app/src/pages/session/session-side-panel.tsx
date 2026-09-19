@@ -81,6 +81,7 @@ export function SessionSidePanel(props: {
   reviewSnap: boolean
   size: Sizing
   stacked?: boolean
+  onClose?: () => void
 }) {
   const layout = useLayout()
   const settings = useSettings()
@@ -308,6 +309,15 @@ export function SessionSidePanel(props: {
         }}
         style={{ width: panelWidth() }}
       >
+        <Show when={props.onClose && open()}>
+          <IconButton
+            icon="close-small"
+            variant="ghost"
+            class="absolute top-1.5 right-1.5 z-30 titlebar-icon w-5 h-5"
+            onClick={() => props.onClose?.()}
+            aria-label={language.t("common.close")}
+          />
+        </Show>
         <Show when={open()}>
           <div
             class="size-full flex"
