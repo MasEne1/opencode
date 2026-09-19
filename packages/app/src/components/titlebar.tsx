@@ -455,7 +455,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     icon="menu"
                     variant="ghost"
                     class="titlebar-icon rounded-md"
-                    onClick={layout.mobileSidebar.toggle}
+                    onClick={layout.sidebar.toggle}
                     aria-label={language.t("sidebar.menu.toggle")}
                     aria-expanded={layout.mobileSidebar.opened()}
                   />
@@ -467,7 +467,7 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     icon="menu"
                     variant="ghost"
                     class="titlebar-icon rounded-md"
-                    onClick={layout.mobileSidebar.toggle}
+                    onClick={layout.sidebar.toggle}
                     aria-label={language.t("sidebar.menu.toggle")}
                     aria-expanded={layout.mobileSidebar.opened()}
                   />

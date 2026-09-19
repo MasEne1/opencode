@@ -14,6 +14,8 @@ This repository is a fork of [anomalyco/opencode](https://github.com/anomalyco/o
 | 4 | README 二改声明、FORK.md、LICENSE 追加 fork 版权 | `docs: mark repository as modified fork` | MIT 合规，保留原版权 |
 | 5 | 项目头像/通知图标改用本地资源 + Avatar 加载失败回退 | `fix(app): use bundled icons and add avatar error fallback` | opencode.ai 在部分网络环境不可达导致图标空白 |
 | 6 | 桌面端侧边栏重设计（新建任务/搜索菜单 + 项目/时间分组标签页）| `feat(app): redesign sidebar with task menu and project/group tabs` | 参考自用工具布局 |
+| 7 | 侧边栏全窗口宽度常驻（断点 xl→lg，窄窗口不再隐藏）、默认展开、☰ 改为主侧边栏开关 | `feat(app): show sidebar from lg breakpoint instead of xl` / `fix(app): keep sidebar rail with redesigned fork panel` | 窄窗口体验 |
+| 8 | 移除会话页顶部重复的会话标题栏（与标题标签页重复）| `feat(app): remove duplicate session header bar` | 界面简化 |
 
 ## 与上游合并 / Upstream merge workflow
 
