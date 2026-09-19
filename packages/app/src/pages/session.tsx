@@ -482,7 +482,7 @@ export default function Page() {
   const sessionPanelAvailable = createMemo(() => {
     const width = panelRowWidth()
     if (width === undefined) return undefined
-    return width - (settings.general.newLayoutDesigns() ? 8 : 0)
+    return width - (workspaceView().opened() ? 576 : 0) - (settings.general.newLayoutDesigns() ? 8 : 0)
   })
   const sessionPanelMax = createMemo(() => {
     const available = sessionPanelAvailable()
@@ -498,12 +498,18 @@ export default function Page() {
       split: splitReview(),
     }),
   )
-  const sessionPanelWidth = createMemo(() => {
-    if (!desktopSidePanelOpen()) return "100%"
-    if (desktopSessionResizeOpen()) return `${sessionPanelResizedWidth()}px`
-    return `calc(100% - ${layout.fileTree.width()}px)`
+  // Workspace view: chat docks right with a fixed width; the file tree and
+  // preview fill everything to its left.
+  const workspaceChatWidth = createMemo(() => {
+    const available = sessionPanelAvailable()
+    if (available === undefined) return 560
+    return Math.max(SESSION_PANEL_WIDTH_MIN, Math.min(layout.session.width(), available - 16))
   })
   const centered = createMemo(() => isDesktop() && (newSessionDesign() || !desktopReviewOpen()))
+  const sessionPanelWidth = createMemo(() => {
+    if (workspaceView().opened()) return `${workspaceChatWidth()}px`
+    return "100%"
+  })
   const desktopV2PanelLayout = createMemo(() =>
     sessionPanelLayout({
       review: desktopV2ReviewOpen(),
@@ -2278,9 +2284,10 @@ export default function Page() {
             "duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
               !size.active() && !ui.reviewSnap && !desktopInlineTerminalOnlyOpen(),
             "order-2": workspaceView().opened(),
+            "ml-auto": workspaceView().opened(),
           }}
           style={{
-            width: sessionPanelWidth(),
+            width: workspaceView().opened() ? `${workspaceChatWidth()}px` : sessionPanelWidth(),
           }}
         >
           {settings.general.newLayoutDesigns() ? (
@@ -2297,11 +2304,11 @@ export default function Page() {
             </SessionPanelFrame>
           )}
 
-          <Show when={desktopSessionResizeOpen()}>
+          <Show when={desktopSessionResizeOpen() || workspaceView().opened()}>
             <div onPointerDown={() => size.start()}>
               <ResizeHandle
                 classList={{
-                  "-end-1": settings.general.newLayoutDesigns(),
+                  "-end-1": !workspaceView().opened(),
                   "-start-1": workspaceView().opened(),
                 }}
                 direction="horizontal"
@@ -2318,7 +2325,7 @@ export default function Page() {
         </div>
 
         <Show when={workspaceView().opened()}>
-          <div class="order-1 h-full min-h-0 shrink-0">
+          <div class="order-1 h-full min-h-0 flex shrink-0">
             <Suspense>
               <WorkspaceLeftDock />
             </Suspense>
