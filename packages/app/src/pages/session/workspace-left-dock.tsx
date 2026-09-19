@@ -150,8 +150,8 @@ export function WorkspaceLeftDock(): JSX.Element {
     if (editor.state.doc.toString() === tab.content) return
     editor.dispatch({
       changes: { from: 0, to: editor.state.doc.length, insert: tab.content },
+      effects: langConf.reconfigure(languageExtensionFor(tab.path)),
     })
-    langConf.reconfigure(languageExtensionFor(tab.path))
   })
 
   // "Add to AI": turn the editor selection into a file + line range reference
