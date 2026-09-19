@@ -45,8 +45,6 @@ const BUCKET_ORDER: TimeBucket[] = ["today", "yesterday", "week", "older"]
 
 export interface SidebarForkProps {
   mobile?: boolean
-  opened: Accessor<boolean>
-  aimMove: (event: MouseEvent) => void
   projects: Accessor<LocalProject[]>
   currentProject: Accessor<LocalProject | undefined>
   currentSessions: Accessor<Session[]>
@@ -76,19 +74,7 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
   const [tab, setTab] = createSignal<"groups" | "projects">("projects")
   const [expanded, setExpanded] = createSignal<string[]>([])
   const now = props.sortNow
-  const expandedShell = createMemo(() => !!props.mobile || props.opened())
   const placement = () => (props.mobile ? "bottom" : "right")
-  let panel: HTMLDivElement | undefined
-
-  createEffect(() => {
-    const el = panel
-    if (!el) return
-    if (expandedShell()) {
-      el.removeAttribute("inert")
-      return
-    }
-    el.setAttribute("inert", "")
-  })
 
   const isExpanded = (worktree: string) => expanded().includes(worktree)
   const toggleExpanded = (worktree: string) =>
@@ -274,7 +260,6 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
       <div
         data-component="sidebar-rail"
         class="w-16 shrink-0 bg-background-base flex flex-col items-center overflow-hidden"
-        onMouseMove={props.aimMove}
       >
         <div class="h-full min-h-0 w-full flex-1">
           <DragDropProvider
@@ -328,13 +313,7 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
         </div>
       </div>
 
-      <div
-        ref={(el) => {
-          panel = el
-        }}
-        classList={{ "flex-1 flex h-full min-h-0 min-w-0 overflow-hidden": true, "pointer-events-none": !expandedShell() }}
-        aria-hidden={!expandedShell()}
-      >
+      <div class="flex-1 flex h-full min-h-0 min-w-0 overflow-hidden">
         <div
           class="flex flex-col box-border rounded-tl-[12px] px-3 border-l border-t border-border-weaker-base bg-background-base"
           style={{ width: "100%" }}

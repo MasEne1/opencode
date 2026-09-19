@@ -2224,8 +2224,6 @@ export default function LegacyLayout(props: ParentProps) {
     // remains available in ./layout/sidebar-shell for reference.
     <SidebarFork
       mobile={mobile}
-      opened={() => layout.sidebar.opened()}
-      aimMove={aim.move}
       projects={projects}
       currentProject={currentProject}
       currentSessions={currentSessions}
@@ -2337,7 +2335,7 @@ export default function LegacyLayout(props: ParentProps) {
                   !state.sizing,
               }}
               style={{
-                "--main-left": layout.sidebar.opened() ? `${side()}px` : "4rem",
+                "--main-left": `${side()}px`,
               }}
             >
               <main
