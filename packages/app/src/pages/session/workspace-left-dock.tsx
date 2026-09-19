@@ -26,7 +26,7 @@ export function WorkspaceLeftDock(): JSX.Element {
   }
 
   return (
-    <div class="flex h-full min-h-0 w-[560px] shrink-0 bg-background-base">
+    <div class="flex h-full min-h-0 w-full flex-1 min-w-0 bg-background-base">
       <div
         class="h-full min-h-0 w-[240px] shrink-0 overflow-y-auto no-scrollbar border-e border-border-weaker-base"
         data-component="workspace-file-tree"

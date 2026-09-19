@@ -2307,6 +2307,7 @@ export default function Page() {
           <Show when={desktopSessionResizeOpen() || workspaceView().opened()}>
             <div onPointerDown={() => size.start()}>
               <ResizeHandle
+                edge={workspaceView().opened() ? "start" : "end"}
                 classList={{
                   "-end-1": !workspaceView().opened(),
                   "-start-1": workspaceView().opened(),
@@ -2325,7 +2326,7 @@ export default function Page() {
         </div>
 
         <Show when={workspaceView().opened()}>
-          <div class="order-1 h-full min-h-0 flex shrink-0">
+          <div class="order-1 h-full min-h-0 flex-1 min-w-0 flex">
             <Suspense>
               <WorkspaceLeftDock />
             </Suspense>
