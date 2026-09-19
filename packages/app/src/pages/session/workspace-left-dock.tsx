@@ -5,6 +5,7 @@
  * composer. Chat lives to the right of this dock (see session.tsx).
  */
 import { Button } from "@opencode-ai/ui/button"
+import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { Compartment, EditorState, type Extension } from "@codemirror/state"
 import { EditorView, keymap } from "@codemirror/view"
 import { cpp } from "@codemirror/lang-cpp"
@@ -201,12 +202,9 @@ export function WorkspaceLeftDock(): JSX.Element {
 
   return (
     <div class="flex h-full min-h-0 w-full flex-1 min-w-0 bg-background-base">
-      <div
-        class="h-full min-h-0 w-[240px] shrink-0 overflow-y-auto no-scrollbar border-e border-border-weaker-base"
-        data-component="workspace-file-tree"
-      >
+      <ScrollView class="h-full min-h-0 w-[240px] shrink-0 border-e border-border-weaker-base">
         <FileTreeV2 onFileClick={(node) => void open(node.path)} />
-      </div>
+      </ScrollView>
       <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background-base">
         <div class="flex shrink-0 items-center gap-1 overflow-x-auto no-scrollbar border-b border-border-weaker-base px-1 pt-1">
           <For each={tabs()}>
