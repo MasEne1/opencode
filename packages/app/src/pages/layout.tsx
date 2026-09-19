@@ -82,7 +82,6 @@ import {
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
 import { SidebarContent } from "./layout/sidebar-shell"
-import { SidebarFork } from "./layout/sidebar-fork"
 
 export default function LegacyLayout(props: ParentProps) {
   const serverSDK = useServerSDK()
@@ -2220,40 +2219,29 @@ export default function LegacyLayout(props: ParentProps) {
   const projects = () => layout.projects.list()
   const projectOverlay = () => <ProjectDragOverlay projects={projects} activeProject={() => store.activeProject} />
   const sidebarContent = (mobile?: boolean) => (
-    // Fork sidebar redesign. The upstream SidebarContent (icon rail + panel)
-    // remains available in ./layout/sidebar-shell for reference.
-    <SidebarFork
+    <SidebarContent
       mobile={mobile}
+      opened={() => layout.sidebar.opened()}
+      aimMove={aim.move}
       projects={projects}
-      currentProject={currentProject}
-      currentSessions={currentSessions}
-      ctx={workspaceSidebarCtx}
-      sortNow={sortNow}
       renderProject={(project) => (
         <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile={mobile} />
       )}
       handleDragStart={handleDragStart}
       handleDragEnd={handleDragEnd}
       handleDragOver={handleDragOver}
-      renderProjectOverlay={projectOverlay}
       openProjectLabel={language.t("command.project.open")}
       openProjectKeybind={() => command.keybind("project.open")}
       onOpenProject={chooseProject}
-      onOpenProjectDirectory={(project) => void navigateToProject(project.worktree)}
-      onNewSession={() => {
-        const dir = currentProject()?.worktree
-        if (!dir) return
-        navigateWithSidebarReset(`/${base64Encode(dir)}/session`)
-      }}
-      newTaskKeybind={() => {
-        const parts = command.keybindParts("tab.new")
-        return parts[parts.length - 1] || undefined
-      }}
-      onOpenSearch={() => command.show()}
-      searchKeybind={() => command.keybind("command.palette") || undefined}
+      renderProjectOverlay={projectOverlay}
+      settingsLabel={() => language.t("sidebar.settings")}
+      settingsKeybind={() => command.keybind("settings.open")}
       onOpenSettings={openSettings}
-      settingsKeybind={() => command.keybind("settings.open") || undefined}
+      helpLabel={() => language.t("sidebar.help")}
       onOpenHelp={() => platform.openExternal("https://opencode.ai/desktop-feedback")}
+      renderPanel={() =>
+        mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
+      }
     />
   )
 
@@ -2325,6 +2313,31 @@ export default function LegacyLayout(props: ParentProps) {
               style={{ "inset-inline-start": "calc(4rem + 12px)" }}
             />
 
+            <div class="lg:hidden">
+              <div
+                classList={{
+                  "fixed inset-x-0 top-10 bottom-0 z-40 transition-opacity duration-200": true,
+                  "opacity-100 pointer-events-auto": layout.mobileSidebar.opened(),
+                  "opacity-0 pointer-events-none": !layout.mobileSidebar.opened(),
+                }}
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) layout.mobileSidebar.hide()
+                }}
+              />
+              <nav
+                aria-label={language.t("sidebar.nav.projectsAndSessions")}
+                data-component="sidebar-nav-mobile"
+                classList={{
+                  "@container fixed top-10 bottom-0 start-0 z-50 w-full max-w-[400px] overflow-hidden border-e border-border-weaker-base bg-background-base transition-transform duration-200 ease-out": true,
+                  "translate-x-0": layout.mobileSidebar.opened(),
+                  "ltr:-translate-x-full rtl:translate-x-full": !layout.mobileSidebar.opened(),
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {sidebarContent(true)}
+              </nav>
+            </div>
+
 
             <div
               classList={{
@@ -2335,7 +2348,7 @@ export default function LegacyLayout(props: ParentProps) {
                   !state.sizing,
               }}
               style={{
-                "--main-left": `${side()}px`,
+                "--main-left": layout.sidebar.opened() ? `${side()}px` : "4rem",
               }}
             >
               <main

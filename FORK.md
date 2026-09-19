@@ -13,10 +13,9 @@ This repository is a fork of [anomalyco/opencode](https://github.com/anomalyco/o
 | 3 | 桌面端支持本地构建 CLI（`OPENCODE_LOCAL_CLI=1` 跳过下载官方二进制）| `chore(desktop): allow local CLI build via OPENCODE_LOCAL_CLI=1` | 开发用，便于桌面端验证本地改动 |
 | 4 | README 二改声明、FORK.md、LICENSE 追加 fork 版权 | `docs: mark repository as modified fork` | MIT 合规，保留原版权 |
 | 5 | 项目头像/通知图标改用本地资源 + Avatar 加载失败回退 | `fix(app): use bundled icons and add avatar error fallback` | opencode.ai 在部分网络环境不可达导致图标空白 |
-| 6 | 桌面端侧边栏重设计（新建任务/搜索菜单 + 项目/时间分组标签页）| `feat(app): redesign sidebar with task menu and project/group tabs` | 参考自用工具布局 |
-| 7 | 侧边栏全窗口宽度常驻（断点 xl→lg，窄窗口不再隐藏）、默认展开、☰ 改为主侧边栏开关 | `feat(app): show sidebar from lg breakpoint instead of xl` / `fix(app): keep sidebar rail with redesigned fork panel` | 窄窗口体验 |
-| 8 | 移除会话页顶部重复的会话标题栏（与标题标签页重复）| `feat(app): remove duplicate session header bar` | 界面简化 |
-| 9 | 固定使用经典布局（含侧边栏），禁用上游默认的无侧边栏标签页布局 | 本文件所在提交 | 新版布局没有侧边栏，与二改方向冲突；Ctrl+B 恢复为侧边栏开关 |
+| 6 | 侧边栏断点 xl→lg（窗口 ≥1024px 即显示侧边栏，窄窗口用 ☰ 抽屉）| `feat(app): show sidebar from lg breakpoint instead of xl` | 窄窗口体验 |
+| 7 | 移除会话页顶部重复的会话标题栏（与标题标签页重复）| `feat(app): remove duplicate session header bar` | 界面简化 |
+| 8 | 固定使用经典布局（含侧边栏），禁用上游默认的无侧边栏标签页布局；Ctrl+B 为侧边栏开关 | `feat(app): force classic layout with sidebar for fork` | 新版布局没有侧边栏，与二改方向冲突 |
 
 ## 与上游合并 / Upstream merge workflow
 
