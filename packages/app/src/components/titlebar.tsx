@@ -24,6 +24,7 @@ import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { LayoutRoute, useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
+import { workspaceView } from "@/pages/session/workspace-view-state"
 import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { WindowsAppMenu } from "./windows-app-menu"
@@ -488,6 +489,25 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     aria-expanded={layout.sidebar.opened()}
                   >
                     <Icon size="small" name={layout.sidebar.opened() ? "sidebar-active" : "sidebar"} />
+                  </Button>
+                </TooltipKeybind>
+                <TooltipKeybind
+                  class="hidden xl:flex shrink-0 ml-1"
+                  placement="bottom"
+                  title={language.t("command.workspace.view")}
+                  keybind={"Ctrl+Alt+W"}
+                >
+                  <Button
+                    variant="ghost"
+                    class="group/workspace-toggle titlebar-icon w-8 h-6 p-0 box-border"
+                    classList={{
+                      "bg-surface-base-active": workspaceView().opened(),
+                    }}
+                    onClick={() => workspaceView().toggle()}
+                    aria-label={language.t("command.workspace.view")}
+                    aria-pressed={workspaceView().opened()}
+                  >
+                    <Icon size="small" name="file-tree" />
                   </Button>
                 </TooltipKeybind>
                 <div class="hidden xl:flex items-center shrink-0">

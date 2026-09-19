@@ -76,6 +76,7 @@ import { createTimelineModel } from "@/pages/session/timeline/model"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { workspaceView } from "@/pages/session/workspace-view-state"
+import { WorkspaceLeftDock } from "@/pages/session/workspace-left-dock"
 import { restorePromptModel, syncPromptModel, syncSessionModel } from "@/pages/session/session-model-helpers"
 import {
   clampSessionPanelWidth,
@@ -2316,24 +2317,11 @@ export default function Page() {
           </Show>
         </div>
 
-        <Show when={!newSessionDesign() && desktopSidePanelOpen()}>
-          <div class="h-full min-h-0" classList={{ "order-1": workspaceView().opened() }}>
-          <Suspense>
-            <SessionSidePanel
-              canReview={canReview}
-              diffs={reviewDiffs}
-              diffsReady={reviewReady}
-              empty={reviewEmptyText}
-              hasReview={hasReview}
-              reviewHasFocusableContent={hasReview}
-              reviewCount={reviewCount}
-              reviewPanel={reviewPanel}
-              activeDiff={activeReviewFile()}
-              focusReviewDiff={focusReviewDiff}
-              reviewSnap={ui.reviewSnap}
-              size={size}
-            />
-          </Suspense>
+        <Show when={workspaceView().opened()}>
+          <div class="order-1 h-full min-h-0 shrink-0">
+            <Suspense>
+              <WorkspaceLeftDock />
+            </Suspense>
           </div>
         </Show>
         <Show when={newSessionDesign()}>

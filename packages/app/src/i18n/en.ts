@@ -843,6 +843,7 @@ export const dict = {
   "sidebar.menu.toggle": "Toggle menu",
   "sidebar.nav.projectsAndSessions": "Projects and sessions",
   "command.workspace.view": "Toggle workspace view",
+  "workspace.selectFile": "Select a file to preview",
   "settings.general.row.workspaceView.title": "Workspace view",
   "settings.general.row.workspaceView.description": "Show the file tree and file preview next to the chat",
   "sidebar.settings": "Settings",
