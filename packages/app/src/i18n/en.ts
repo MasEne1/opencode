@@ -850,6 +850,7 @@ export const dict = {
   "workspace.cancel": "Cancel",
   "workspace.saved.toast": "File saved",
   "workspace.saved.error": "Failed to save file",
+  "workspace.addToAI": "Add to AI",
   "workspace.reference.selection": "Add selection to chat",
   "workspace.reference.line": "Reference line {line}",
   "workspace.reference.lines": "Reference lines {start}-{end}",

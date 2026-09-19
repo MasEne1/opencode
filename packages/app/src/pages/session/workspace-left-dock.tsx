@@ -1,21 +1,28 @@
 /**
- * Fork workspace view, left dock: the project file tree plus a read/edit view
- * of the selected file, and "reference selection" into the AI composer. Chat
+ * Fork workspace view, left dock: the project file tree plus multi-tab
+ * editable file views. Selecting text inside a tab shows a floating "add to
+ * AI" button that references the file and line range in the composer. Chat
  * lives to the right of this dock (see session.tsx).
  */
 import { sampledChecksum } from "@opencode-ai/core/util/encode"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
 import { Button } from "@opencode-ai/ui/button"
-import { Dynamic } from "solid-js/web"
+import { Dynamic, Portal } from "solid-js/web"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
-import { createMemo, createSignal, Match, Show, Switch, type JSX } from "solid-js"
+import { createMemo, createSignal, For, Show, type JSX } from "solid-js"
 import FileTreeV2 from "@/components/file-tree-v2"
-import { selectionFromLines, useFile, type SelectedLineRange } from "@/context/file"
+import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
-import { cloneSelectedLineRange, previewSelectedLines } from "@opencode-ai/session-ui/pierre/selection-bridge"
 import { showToast } from "@/utils/toast"
+
+type Tab = {
+  path: string
+  name: string
+  content: string
+  saved: string
+}
 
 export function WorkspaceLeftDock(): JSX.Element {
   const file = useFile()
@@ -23,77 +30,90 @@ export function WorkspaceLeftDock(): JSX.Element {
   const fileComponent = useFileComponent()
   const sdk = useSDK()
   const prompt = usePrompt()
-  const [selected, setSelected] = createSignal<string>()
-  const [selection, setSelection] = createSignal<SelectedLineRange | null>(null)
-  const [editing, setEditing] = createSignal(false)
-  const [draft, setDraft] = createSignal("")
+  const [tabs, setTabs] = createSignal<Tab[]>([])
+  const [activePath, setActivePath] = createSignal<string>()
+  const [floatBox, setFloatBox] = createSignal<{ x: number; y: number }>()
+  const [floatRange, setFloatRange] = createSignal<{ start: number; end: number }>()
 
-  const state = createMemo(() => (selected() ? file.get(selected()!) : undefined))
-  const contents = createMemo(() => {
-    const raw = state()?.content
-    return typeof raw === "string" ? raw : (typeof raw?.content === "string" ? raw.content : "")
+  const activeTab = createMemo(() => tabs().find((tab) => tab.path === activePath()))
+  const dirty = createMemo(() => {
+    const tab = activeTab()
+    return !!tab && tab.content !== tab.saved
   })
 
-  const open = (path: string) => {
-    setSelected(path)
-    setSelection(null)
-    setEditing(false)
-    setDraft("")
-    void file.load(path)
+  const fileName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() || path
+
+  const open = async (path: string) => {
+    setActivePath(path)
+    if (tabs().some((tab) => tab.path === path)) return
+    await file.load(path)
+    const raw = file.get(path)?.content
+    const content = typeof raw === "string" ? raw : (typeof raw?.content === "string" ? raw.content : "")
+    setTabs((list) => (list.some((tab) => tab.path === path) ? list : [...list, { path, name: fileName(path), content, saved: content }]))
   }
 
-  const onLineSelected = (range: SelectedLineRange | null) => {
-    setSelection(range ? cloneSelectedLineRange(range) : null)
+  const closeTab = (path: string) => {
+    setTabs((list) => {
+      const next = list.filter((tab) => tab.path !== path)
+      if (activePath() === path) setActivePath(next.length > 0 ? next[next.length - 1].path : undefined)
+      return next
+    })
   }
 
-  const referenceSelection = () => {
-    const path = selected()
-    const range = selection()
-    if (!path || !range) return
+  const setContent = (content: string) => {
+    setTabs((list) => list.map((tab) => (tab.path === activePath() ? { ...tab, content } : tab)))
+  }
+
+  const save = async () => {
+    const tab = activeTab()
+    if (!tab) return
+    try {
+      await sdk().client.v2.fs.write({ location: { directory: sdk().directory }, path: tab.path, content: tab.content })
+      setTabs((list) => list.map((item) => (item.path === tab.path ? { ...item, saved: item.content } : item)))
+      void file.load(tab.path, { force: true })
+      showToast({ variant: "success", title: language.t("workspace.saved.toast") })
+    } catch {
+      showToast({ variant: "error", title: language.t("workspace.saved.error") })
+    }
+  }
+
+  // Text selection inside the editable tab: track the range and the mouse
+  // position so a floating "add to AI" button can appear next to the cursor.
+  const selectionRange = () => {
+    const element = document.querySelector("textarea[data-workspace-edit]")
+    if (!(element instanceof HTMLTextAreaElement)) return undefined
+    const start = element.selectionStart ?? 0
+    const end = element.selectionEnd ?? 0
+    if (start === end) return undefined
+    return { start, end }
+  }
+
+  const onMouseUp = (event: MouseEvent) => {
+    const range = selectionRange()
+    if (range) {
+      setFloatRange(range)
+      setFloatBox({ x: event.clientX, y: event.clientY })
+    } else {
+      setFloatBox(undefined)
+      setFloatRange(undefined)
+    }
+  }
+
+  const addSelectionToAI = () => {
+    const tab = activeTab()
+    const range = floatRange()
+    if (!tab || !range) return
+    const selectedText = tab.content.slice(range.start, range.end)
+    const startLine = tab.content.slice(0, range.start).split("\n").length
+    const endLine = startLine + selectedText.split("\n").length - 1
     prompt.context.add({
       type: "file",
-      path,
-      selection: selectionFromLines(range),
-      preview: previewSelectedLines(contents(), { start: range.start, end: range.end }),
+      path: tab.path,
+      selection: { startLine, startChar: 0, endLine, endChar: 0 },
+      preview: selectedText.slice(0, 400),
     })
-    setSelection(null)
-  }
-
-  const startEdit = () => {
-    setDraft(contents())
-    setEditing(true)
-  }
-
-  const cancelEdit = () => {
-    setEditing(false)
-    setDraft("")
-  }
-
-  const save = () => {
-    const path = selected()
-    if (!path) return
-    void sdk()
-      .client.v2.fs.write({ location: { directory: sdk().directory }, path, content: draft() })
-      .then(() => {
-        setEditing(false)
-        setDraft("")
-        return file.load(path, { force: true })
-      })
-      .then(() => {
-        showToast({ variant: "success", title: language.t("workspace.saved.toast") })
-      })
-      .catch(() => {
-        showToast({ variant: "error", title: language.t("workspace.saved.error") })
-      })
-  }
-
-  const selectionLabel = () => {
-    const range = selection()
-    if (!range) return language.t("workspace.reference.selection")
-    if (range.start === range.end) return language.t("workspace.reference.line").replace("{line}", String(range.start))
-    return language.t("workspace.reference.lines")
-      .replace("{start}", String(range.start))
-      .replace("{end}", String(range.end))
+    setFloatBox(undefined)
+    setFloatRange(undefined)
   }
 
   return (
@@ -102,97 +122,78 @@ export function WorkspaceLeftDock(): JSX.Element {
         class="h-full min-h-0 w-[240px] shrink-0 overflow-y-auto no-scrollbar border-e border-border-weaker-base"
         data-component="workspace-file-tree"
       >
-        <FileTreeV2
-          onFileClick={(node) => open(node.path)}
-          onFileDoubleClick={(node) => open(node.path)}
-        />
+        <FileTreeV2 onFileClick={(node) => void open(node.path)} />
       </div>
       <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background-base">
-        <div class="flex shrink-0 items-center gap-2 border-b border-border-weaker-base px-3 py-1.5">
-          <span class="min-w-0 flex-1 truncate text-12-medium text-text-base">{selected()}</span>
-          <Show when={selected() && selection()}>
-            <Button size="small" onClick={referenceSelection}>
-              {selectionLabel()}
-            </Button>
-          </Show>
-          <Show
-            when={editing()}
-            fallback={
-              <Show when={selected()}>
-                <Button size="small" variant="secondary" onClick={startEdit}>
-                  {language.t("workspace.edit")}
-                </Button>
-              </Show>
-            }
-          >
-            <Button size="small" onClick={save}>
-              {language.t("workspace.save")}
-            </Button>
-            <Button size="small" variant="secondary" onClick={cancelEdit}>
-              {language.t("workspace.cancel")}
-            </Button>
-          </Show>
-        </div>
         <Show
-          when={editing()}
+          when={activeTab()}
           fallback={
-            <ScrollView class="min-h-0 flex-1">
-              <Switch>
-                <Match when={state()?.loading}>
-                  <div class="px-4 py-3 text-12-regular text-text-weak">
-                    {language.t("common.loading")}
-                    {language.t("common.loading.ellipsis")}
-                  </div>
-                </Match>
-                <Match when={state()?.error}>
-                  {(err) => <div class="px-4 py-3 text-12-regular text-text-weak">{err()}</div>}
-                </Match>
-              </Switch>
-              <Show when={state()?.loaded}>
-                {(() => {
-                  const path = selected()!
-                  const raw = file.get(path)?.content
-                  const contents = typeof raw === "string" ? raw : (typeof raw?.content === "string" ? raw.content : "")
-                  if (raw?.type === "binary") {
-                    return (
-                      <div class="px-4 py-3 text-12-regular text-text-weak">
-                        {language.t("workspace.binaryFile")}
-                      </div>
-                    )
-                  }
-                  return (
-                    <div class="relative pb-40">
-                      <Dynamic
-                        component={fileComponent}
-                        mode="text"
-                        file={{
-                          name: path,
-                          contents,
-                          cacheKey: sampledChecksum(contents),
-                        }}
-                        enableLineSelection
-                        selectedLines={selection() ?? undefined}
-                        onLineSelected={onLineSelected}
-                        onLineSelectionEnd={onLineSelected}
-                        class="select-text"
-                      />
-                    </div>
-                  )
-                })()}
-              </Show>
-            </ScrollView>
+            <div class="flex flex-1 items-center justify-center text-13-regular text-text-weak">
+              {language.t("workspace.selectFile")}
+            </div>
           }
         >
-          <div class="flex min-h-0 flex-1 flex-col overflow-hidden p-2">
-            <textarea
-              class="h-full min-h-0 w-full flex-1 resize-none rounded-lg bg-background-stronger p-3 font-mono text-13-regular text-text-strong outline-none"
-              value={draft()}
-              onInput={(e) => setDraft(e.currentTarget.value)}
-              spellcheck={false}
-            />
-          </div>
+          {(tab) => (
+            <>
+              <div class="flex shrink-0 items-center gap-1 overflow-x-auto no-scrollbar border-b border-border-weaker-base px-1 pt-1">
+                <For each={tabs()}>
+                  {(item) => (
+                    <div
+                      class="flex max-w-[160px] shrink-0 cursor-pointer items-center gap-1 rounded-t-md px-2 py-1 text-12-regular hover:bg-surface-raised-base-hover"
+                      classList={{
+                        "bg-background-stronger text-text-strong": activePath() === item.path,
+                        "text-text-weak": activePath() !== item.path,
+                      }}
+                      onClick={() => setActivePath(item.path)}
+                    >
+                      <span class="truncate">{item.name}</span>
+                      <Show when={item.content !== item.saved}>
+                        <span class="text-icon-base">●</span>
+                      </Show>
+                      <span
+                        class="text-text-weak hover:text-text-strong"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          closeTab(item.path)
+                        }}
+                      >
+                        ×
+                      </span>
+                    </div>
+                  )}
+                </For>
+                <div class="flex-1" />
+                <Button size="small" disabled={!dirty()} onClick={save}>
+                  {language.t("workspace.save")}
+                </Button>
+              </div>
+              <textarea
+                data-workspace-edit
+                class="min-h-0 w-full flex-1 resize-none bg-background-base p-3 font-mono text-13-regular text-text-strong outline-none select-text"
+                value={tab().content}
+                onInput={(e) => setContent(e.currentTarget.value)}
+                onMouseUp={onMouseUp}
+                spellcheck={false}
+              />
+            </>
+          )}
         </Show>
       </div>
+      <Show when={floatBox() && floatRange()}>
+        <Portal>
+          <div
+            class="fixed z-50 flex items-center gap-1 rounded-md border border-border-weaker-base bg-background-stronger p-1 shadow-lg"
+            style={{
+              left: `${Math.min(floatBox()!.x, window.innerWidth - 140)}px`,
+              top: `${Math.max(8, floatBox()!.y - 40)}px`,
+            }}
+          >
+            <Button size="small" onClick={addSelectionToAI}>
+              {language.t("workspace.addToAI")}
+            </Button>
+          </div>
+        </Portal>
+      </Show>
     </div>
   )
 }

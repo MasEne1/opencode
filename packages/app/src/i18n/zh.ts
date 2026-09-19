@@ -870,6 +870,7 @@ export const dict = {
   "workspace.cancel": "取消",
   "workspace.saved.toast": "文件已保存",
   "workspace.saved.error": "文件保存失败",
+  "workspace.addToAI": "添加到 AI",
   "workspace.reference.selection": "将所选内容加入对话",
   "workspace.reference.line": "引用第 {line} 行",
   "workspace.reference.lines": "引用第 {start}-{end} 行",
