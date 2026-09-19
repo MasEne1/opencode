@@ -41,7 +41,7 @@ const workspaceFontSize = () => workspaceView().fontSize()
 // Contain the editor inside the dock with internal scrolling and explicit
 // dark colors so the app theme doesn't wash it out.
 const workspaceTheme = EditorView.theme({
-  "&": { height: "100%", backgroundColor: "var(--background-base, #141419)", color: "#c9d1d9" },
+  "&": { height: "100%", backgroundColor: "var(--background-base, #141419) !important", color: "#c9d1d9" },
   ".cm-content": { backgroundColor: "transparent", caretColor: "#abb2bf" },
   ".cm-scroller": {
     overflow: "auto",
@@ -49,7 +49,7 @@ const workspaceTheme = EditorView.theme({
     lineHeight: "1.6",
   },
   ".cm-gutters": {
-    backgroundColor: "transparent",
+    backgroundColor: "transparent !important",
     color: "#636d83",
     border: "none",
   },
