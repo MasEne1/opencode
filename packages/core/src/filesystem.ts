@@ -83,8 +83,12 @@ const baseLayer = Layer.effect(
       glob: search.glob,
       grep: search.grep,
       write: Effect.fn("FileSystem.write")(function* (input) {
-        const target = yield* resolve(input.path)
-        yield* fs.writeFileString(target.real, input.content).pipe(Effect.orDie)
+        // The target file may not exist yet, so containment is checked against
+        // the location directory instead of resolve()'s real-path validation.
+        const absolute = path.resolve(location.directory, input.path)
+        if (!FSUtil.contains(location.directory, absolute))
+          return yield* Effect.die(new Error("Path escapes the location"))
+        yield* fs.writeFileString(absolute, input.content).pipe(Effect.orDie)
       }),
       read: Effect.fn("FileSystem.read")(function* (input) {
         const target = yield* resolve(input.path)
