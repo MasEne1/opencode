@@ -24,7 +24,8 @@ import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { type Session } from "@opencode-ai/sdk/v2/client"
 import { type LocalProject } from "@/context/layout"
 import { useLanguage } from "@/context/language"
-import { displayName, getProjectAvatarSource } from "./helpers"
+import { useServerSync } from "@/context/server-sync"
+import { displayName, getProjectAvatarSource, sortedRootSessions } from "./helpers"
 import { SessionItem } from "./sidebar-items"
 import { LocalWorkspace, type WorkspaceSidebarContext } from "./sidebar-workspace"
 
@@ -71,6 +72,7 @@ export interface SidebarForkProps {
 
 export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
   const language = useLanguage()
+  const serverSync = useServerSync()
   const [tab, setTab] = createSignal<"groups" | "projects">("projects")
   const [expanded, setExpanded] = createSignal<string[]>([])
   const now = props.sortNow
@@ -88,14 +90,24 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
     el.setAttribute("inert", "")
   })
 
-  const currentSlug = createMemo(() => {
-    const dir = props.currentProject()?.worktree
-    return dir ? base64Encode(dir) : ""
-  })
-
   const isExpanded = (worktree: string) => expanded().includes(worktree)
   const toggleExpanded = (worktree: string) =>
     setExpanded((list) => (list.includes(worktree) ? list.filter((item) => item !== worktree) : [...list, worktree]))
+
+  // Groups tab: sessions from ALL projects, bucketed by time. The 项目 tab
+  // covers per-project lists; this one is the cross-project timeline.
+  const allSessions = createMemo(() => {
+    const rows: Array<{ session: Session; project: LocalProject }> = []
+    for (const project of props.projects()) {
+      const [store] = serverSync().child(project.worktree, { bootstrap: true })
+      for (const session of sortedRootSessions(store, now())) rows.push({ session, project })
+    }
+    return rows.sort((a, b) => {
+      const at = a.session.time.updated ?? a.session.time.created
+      const bt = b.session.time.updated ?? b.session.time.created
+      return bt - at
+    })
+  })
 
   const grouped = createMemo(() => {
     const titles: Record<TimeBucket, string> = {
@@ -104,18 +116,18 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
       week: language.t("sidebar.fork.group.week"),
       older: language.t("sidebar.fork.group.older"),
     }
-    const buckets = new Map<TimeBucket, Session[]>()
-    for (const session of props.currentSessions()) {
-      const time = session.time.updated ?? session.time.created
+    const buckets = new Map<TimeBucket, Array<{ session: Session; project: LocalProject }>>()
+    for (const row of allSessions()) {
+      const time = row.session.time.updated ?? row.session.time.created
       const bucket = timeBucket(time, now())
       const list = buckets.get(bucket)
-      if (list) list.push(session)
-      else buckets.set(bucket, [session])
+      if (list) list.push(row)
+      else buckets.set(bucket, [row])
     }
     return BUCKET_ORDER.filter((bucket) => buckets.has(bucket)).map((bucket) => ({
       bucket,
       title: titles[bucket],
-      sessions: buckets.get(bucket)!,
+      rows: buckets.get(bucket)!,
     }))
   })
 
@@ -219,13 +231,13 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
                 {(group) => (
                   <div class="flex flex-col gap-0.5">
                     <div class="px-2 py-1 text-12-medium text-text-weak">{group.title}</div>
-                    <For each={group.sessions}>
-                      {(session) => (
+                    <For each={group.rows}>
+                      {(row) => (
                         <SessionItem
-                          session={session}
-                          list={group.sessions}
+                          session={row.session}
+                          list={group.rows.map((item) => item.session)}
                           navList={props.ctx.navList}
-                          slug={currentSlug()}
+                          slug={base64Encode(row.project.worktree)}
                           mobile={props.mobile}
                           showChild
                           sidebarExpanded={props.ctx.sidebarExpanded}
