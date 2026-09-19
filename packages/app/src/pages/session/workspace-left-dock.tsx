@@ -88,6 +88,18 @@ export function WorkspaceLeftDock(): JSX.Element {
     return { start, end }
   }
 
+  const onKeyDown = (event: KeyboardEvent & { currentTarget: HTMLTextAreaElement }) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+      event.preventDefault()
+      void save()
+      return
+    }
+    if (event.key === "Escape") {
+      setFloatBox(undefined)
+      setFloatRange(undefined)
+    }
+  }
+
   const onMouseUp = (event: MouseEvent) => {
     const range = selectionRange()
     if (range) {
@@ -172,6 +184,7 @@ export function WorkspaceLeftDock(): JSX.Element {
                 class="min-h-0 w-full flex-1 resize-none bg-background-base p-3 font-mono text-13-regular text-text-strong outline-none select-text"
                 value={tab().content}
                 onInput={(e) => setContent(e.currentTarget.value)}
+                onKeyDown={onKeyDown}
                 onMouseUp={onMouseUp}
                 spellcheck={false}
               />
