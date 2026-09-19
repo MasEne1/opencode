@@ -5,11 +5,11 @@ import { Select } from "@opencode-ai/ui/select"
 import { Switch } from "@opencode-ai/ui/switch"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
-import { Tag } from "@opencode-ai/ui/v2/badge-v2"
 import { useTheme, type ColorScheme } from "@opencode-ai/ui/theme/context"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useParams } from "@solidjs/router"
 import { useLanguage } from "@/context/language"
+import { workspaceView } from "@/pages/session/workspace-view-state"
 import { usePermission } from "@/context/permission"
 import { usePlatform, type DisplayBackend } from "@/context/platform"
 import { useServerSync } from "@/context/server-sync"
@@ -256,25 +256,11 @@ export const SettingsGeneral: Component = () => {
     <div class="flex flex-col gap-1">
       <SettingsList>
         <SettingsRow
-          title={
-            <span class="flex items-center gap-2">
-              {language.t("settings.general.row.newInterface.title")}
-              <Tag variant="accent">{language.t("settings.general.row.newInterface.badge")}</Tag>
-            </span>
-          }
-          description={language.t("settings.general.row.newInterface.description")}
+          title={language.t("settings.general.row.workspaceView.title")}
+          description={language.t("settings.general.row.workspaceView.description")}
         >
-          <div data-action="settings-new-layout-designs">
-            <Switch
-              checked={settings.general.newLayoutDesigns()}
-              onChange={(checked) => {
-                settings.general.setNewLayoutDesigns(checked)
-                if (!checked) return
-                void import("@/components/settings-v2").then((module) => {
-                  void dialog.show(() => <module.DialogSettings />)
-                })
-              }}
-            />
+          <div data-action="settings-workspace-view">
+            <Switch checked={workspaceView().opened()} onChange={() => workspaceView().toggle()} />
           </div>
         </SettingsRow>
       </SettingsList>

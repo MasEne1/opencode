@@ -75,6 +75,7 @@ import { MessageTimeline } from "@/pages/session/timeline/message-timeline"
 import { createTimelineModel } from "@/pages/session/timeline/model"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
+import { workspaceView } from "@/pages/session/workspace-view-state"
 import { restorePromptModel, syncPromptModel, syncSessionModel } from "@/pages/session/session-model-helpers"
 import {
   clampSessionPanelWidth,
@@ -1151,7 +1152,20 @@ export default function Page() {
       hidden: true,
       onSelect: () => command.trigger("file.open", "palette"),
     },
+    {
+      id: "workspace.view",
+      title: language.t("command.workspace.view"),
+      category: language.t("command.category.view"),
+      keybind: "mod+alt+w",
+      onSelect: () => workspaceView().toggle(),
+    },
   ])
+
+  // Workspace view pairs the file dock with the chat panel, so make sure the
+  // dock has something to show when the view is enabled.
+  createEffect(() => {
+    if (workspaceView().opened()) layout.fileTree.open()
+  })
 
   const openReviewFile = createOpenReviewFile({
     showAllFiles,
@@ -2262,6 +2276,7 @@ export default function Page() {
             "@container relative shrink-0 flex flex-col min-h-0 h-full flex-1 md:flex-none transition-[width]": true,
             "duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
               !size.active() && !ui.reviewSnap && !desktopInlineTerminalOnlyOpen(),
+            "order-2": workspaceView().opened(),
           }}
           style={{
             width: sessionPanelWidth(),
@@ -2286,6 +2301,7 @@ export default function Page() {
               <ResizeHandle
                 classList={{
                   "-end-1": settings.general.newLayoutDesigns(),
+                  "-start-1": workspaceView().opened(),
                 }}
                 direction="horizontal"
                 size={sessionPanelResizedWidth()}
@@ -2301,6 +2317,7 @@ export default function Page() {
         </div>
 
         <Show when={!newSessionDesign() && desktopSidePanelOpen()}>
+          <div class="h-full min-h-0" classList={{ "order-1": workspaceView().opened() }}>
           <Suspense>
             <SessionSidePanel
               canReview={canReview}
@@ -2317,6 +2334,7 @@ export default function Page() {
               size={size}
             />
           </Suspense>
+          </div>
         </Show>
         <Show when={newSessionDesign()}>
           <Show when={isDesktop() ? desktopV2PanelLayout().visible : terminalOpen()}>

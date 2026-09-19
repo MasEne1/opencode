@@ -16,6 +16,7 @@ This repository is a fork of [anomalyco/opencode](https://github.com/anomalyco/o
 | 6 | 侧边栏断点 xl→lg（窗口 ≥1024px 即显示侧边栏，窄窗口用 ☰ 抽屉）| `feat(app): show sidebar from lg breakpoint instead of xl` | 窄窗口体验 |
 | 7 | 移除会话页顶部重复的会话标题栏（与标题标签页重复）| `feat(app): remove duplicate session header bar` | 界面简化 |
 | 8 | 固定使用经典布局（含侧边栏），禁用上游默认的无侧边栏标签页布局；Ctrl+B 为侧边栏开关 | `feat(app): force classic layout with sidebar for fork` | 新版布局没有侧边栏，与二改方向冲突 |
+| 9 | 工作区分栏视图：文件树+文件预览在左，AI 对话靠右，Ctrl+Alt+W / 设置页可切换，只读预览 | `feat(app): workspace split view with file tree, preview and right-docked chat` | 复用上游 SessionFileBrowserTab / FileTreeV2 / pierre 只读查看器 |
 
 ## 与上游合并 / Upstream merge workflow
 

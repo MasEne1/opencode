@@ -862,6 +862,9 @@ export const dict = {
 
   "sidebar.menu.toggle": "切换菜单",
   "sidebar.nav.projectsAndSessions": "项目和会话",
+  "command.workspace.view": "切换工作区视图",
+  "settings.general.row.workspaceView.title": "工作区视图",
+  "settings.general.row.workspaceView.description": "在对话旁边显示文件树和文件预览",
   "sidebar.settings": "设置",
   "sidebar.help": "帮助",
   "sidebar.workspaces.enable": "启用工作区",
