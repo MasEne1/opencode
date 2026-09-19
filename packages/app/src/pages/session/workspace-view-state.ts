@@ -7,6 +7,7 @@ export function createWorkspaceViewState() {
     Persist.global("workspace-view"),
     createStore({
       opened: false,
+      fontSize: 13,
     }),
   )
   return {
@@ -14,6 +15,8 @@ export function createWorkspaceViewState() {
     toggle: () => setStore("opened", (opened) => !opened),
     open: () => setStore("opened", true),
     close: () => setStore("opened", false),
+    fontSize: () => store.fontSize,
+    setFontSize: (size: number) => setStore("fontSize", Math.max(10, Math.min(28, Math.round(size)))),
   }
 }
 

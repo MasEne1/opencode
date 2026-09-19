@@ -23,6 +23,7 @@ import { useFile } from "@/context/file"
 import { useLanguage } from "@/context/language"
 import { usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
+import { workspaceView } from "@/pages/session/workspace-view-state"
 import { showToast } from "@/utils/toast"
 
 type Tab = {
@@ -33,11 +34,15 @@ type Tab = {
 }
 
 const langConf = new Compartment()
+const fontConf = new Compartment()
+
+const workspaceFontSize = () => workspaceView().fontSize()
 
 // Contain the editor inside the dock with internal scrolling and explicit
 // dark colors so the app theme doesn't wash it out.
 const workspaceTheme = EditorView.theme({
-  "&": { height: "100%", backgroundColor: "transparent" },
+  "&": { height: "100%", backgroundColor: "transparent", color: "#c9d1d9" },
+  ".cm-content": { backgroundColor: "transparent", caretColor: "#abb2bf" },
   ".cm-scroller": {
     overflow: "auto",
     fontFamily: "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
@@ -49,7 +54,6 @@ const workspaceTheme = EditorView.theme({
     border: "none",
   },
   ".cm-activeLine": { backgroundColor: "rgba(255, 255, 255, 0.04)" },
-  ".cm-content": { caretColor: "#abb2bf" },
 })
 const lineSeparator = String.fromCharCode(10)
 
