@@ -482,7 +482,7 @@ export default function Page() {
   const sessionPanelAvailable = createMemo(() => {
     const width = panelRowWidth()
     if (width === undefined) return undefined
-    return width - (workspaceView().opened() ? 576 : 0) - (settings.general.newLayoutDesigns() ? 8 : 0)
+    return width - (settings.general.newLayoutDesigns() ? 8 : 0)
   })
   const sessionPanelMax = createMemo(() => {
     const available = sessionPanelAvailable()
@@ -501,14 +501,16 @@ export default function Page() {
   // Workspace view: chat docks right with a fixed width; the file tree and
   // preview fill everything to its left.
   const workspaceChatWidth = createMemo(() => {
-    const available = sessionPanelAvailable()
+    const available = panelRowWidth()
     if (available === undefined) return 560
-    return Math.max(SESSION_PANEL_WIDTH_MIN, Math.min(layout.session.width(), available - 16))
+    return Math.max(SESSION_PANEL_WIDTH_MIN, Math.min(layout.session.width() || 560, available - 576))
   })
   const centered = createMemo(() => isDesktop() && (newSessionDesign() || !desktopReviewOpen()))
   const sessionPanelWidth = createMemo(() => {
     if (workspaceView().opened()) return `${workspaceChatWidth()}px`
-    return "100%"
+    if (!desktopSidePanelOpen()) return "100%"
+    if (desktopSessionResizeOpen()) return `${sessionPanelResizedWidth()}px`
+    return `calc(100% - ${layout.fileTree.width()}px)`
   })
   const desktopV2PanelLayout = createMemo(() =>
     sessionPanelLayout({
@@ -2325,6 +2327,24 @@ export default function Page() {
           </Show>
         </div>
 
+        <Show when={!newSessionDesign() && desktopSidePanelOpen() && !workspaceView().opened()}>
+          <Suspense>
+            <SessionSidePanel
+              canReview={canReview}
+              diffs={reviewDiffs}
+              diffsReady={reviewReady}
+              empty={reviewEmptyText}
+              hasReview={hasReview}
+              reviewHasFocusableContent={hasReview}
+              reviewCount={reviewCount}
+              reviewPanel={reviewPanel}
+              activeDiff={activeReviewFile()}
+              focusReviewDiff={focusReviewDiff}
+              reviewSnap={ui.reviewSnap}
+              size={size}
+            />
+          </Suspense>
+        </Show>
         <Show when={workspaceView().opened()}>
           <div class="order-1 h-full min-h-0 flex-1 min-w-0 flex">
             <Suspense>
