@@ -1,15 +1,27 @@
 /**
- * Fork-only sidebar redesign: task menu (new task / search) + "分组 / 项目"
- * tabs. The upstream SidebarContent/SidebarPanel stay untouched; this component
- * only replaces their usage in pages/layout.tsx so upstream merges stay clean.
+ * Fork-only sidebar redesign. Keeps the upstream shell behavior (project
+ * avatar rail + expandable panel) but the expanded panel is the new task-menu
+ * + groups/projects layout. The upstream SidebarContent/SidebarPanel stay
+ * untouched so future upstream merges stay clean.
  */
 import { base64Encode } from "@opencode-ai/core/util/encode"
+import { createEffect, createMemo, createSignal, For, Show, type Accessor, type JSX } from "solid-js"
+import {
+  DragDropProvider,
+  DragDropSensors,
+  DragOverlay,
+  SortableProvider,
+  closestCenter,
+  type DragEvent,
+} from "@thisbeyond/solid-dnd"
+import { ConstrainDragXAxis } from "@/utils/solid-dnd"
 import { Avatar } from "@opencode-ai/ui/avatar"
+import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { SegmentedControlV2, SegmentedControlItemV2 } from "@opencode-ai/ui/v2/segmented-control-v2"
+import { Tooltip, TooltipKeybind } from "@opencode-ai/ui/tooltip"
 import { type Session } from "@opencode-ai/sdk/v2/client"
-import { type Accessor, createMemo, createSignal, For, Show, type JSX } from "solid-js"
 import { type LocalProject } from "@/context/layout"
 import { useLanguage } from "@/context/language"
 import { displayName, getProjectAvatarSource } from "./helpers"
@@ -32,17 +44,26 @@ const BUCKET_ORDER: TimeBucket[] = ["today", "yesterday", "week", "older"]
 
 export interface SidebarForkProps {
   mobile?: boolean
+  opened: Accessor<boolean>
+  aimMove: (event: MouseEvent) => void
   projects: Accessor<LocalProject[]>
   currentProject: Accessor<LocalProject | undefined>
   currentSessions: Accessor<Session[]>
   ctx: WorkspaceSidebarContext
   sortNow: Accessor<number>
+  renderProject: (project: LocalProject) => JSX.Element
+  handleDragStart: (event: unknown) => void
+  handleDragEnd: () => void
+  handleDragOver: (event: DragEvent) => void
+  renderProjectOverlay: () => JSX.Element
+  openProjectLabel: string
+  openProjectKeybind: Accessor<string | undefined>
+  onOpenProject: () => void
+  onOpenProjectDirectory: (project: LocalProject) => void
   onNewSession: () => void
   newTaskKeybind: Accessor<string | undefined>
   onOpenSearch: () => void
   searchKeybind: Accessor<string | undefined>
-  onOpenProject: () => void
-  onOpenProjectDirectory: (project: LocalProject) => void
   onOpenSettings: () => void
   settingsKeybind: Accessor<string | undefined>
   onOpenHelp: () => void
@@ -53,6 +74,19 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
   const [tab, setTab] = createSignal<"groups" | "projects">("projects")
   const [expanded, setExpanded] = createSignal<string[]>([])
   const now = props.sortNow
+  const expandedShell = createMemo(() => !!props.mobile || props.opened())
+  const placement = () => (props.mobile ? "bottom" : "right")
+  let panel: HTMLDivElement | undefined
+
+  createEffect(() => {
+    const el = panel
+    if (!el) return
+    if (expandedShell()) {
+      el.removeAttribute("inert")
+      return
+    }
+    el.setAttribute("inert", "")
+  })
 
   const currentSlug = createMemo(() => {
     const dir = props.currentProject()?.worktree
@@ -86,7 +120,7 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
   })
 
   const menuRow = (options: {
-    icon: JSX.Element | "plus" | "magnifying-glass"
+    icon: "plus" | "magnifying-glass"
     label: string
     keybind?: string
     onClick: () => void
@@ -96,12 +130,7 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
       class="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-14-regular text-text-strong hover:bg-surface-raised-base-hover"
       onClick={options.onClick}
     >
-      <Show
-        when={typeof options.icon === "string"}
-        fallback={<span class="shrink-0 text-icon-base">{options.icon as JSX.Element}</span>}
-      >
-        <IconV2 name={options.icon as "plus" | "magnifying-glass"} size="small" class="shrink-0 text-icon-base" />
-      </Show>
+      <IconV2 name={options.icon} size="small" class="shrink-0 text-icon-base" />
       <span class="flex-1 truncate text-start">{options.label}</span>
       <Show when={options.keybind}>
         <span class="text-12-regular text-text-weak">{options.keybind}</span>
@@ -157,11 +186,8 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
     )
   }
 
-  return (
-    <div
-      data-component="sidebar-fork"
-      class="flex h-full w-full min-w-0 flex-col overflow-hidden bg-background-base px-2 pt-3 pb-2"
-    >
+  const panelContent = () => (
+    <div class="flex h-full w-full min-w-0 flex-col overflow-hidden px-2 pt-3 pb-2">
       <div class="flex flex-col gap-0.5">
         {menuRow({
           icon: "plus",
@@ -223,25 +249,85 @@ export const SidebarFork = (props: SidebarForkProps): JSX.Element => {
               onClick={props.onOpenProject}
             >
               <IconV2 name="folder-add-left" size="small" class="shrink-0 text-icon-base" />
-              <span class="truncate">{language.t("command.project.open")}</span>
+              <span class="truncate">{props.openProjectLabel}</span>
             </button>
           </div>
         </Show>
       </div>
+    </div>
+  )
 
-      <div class="shrink-0 border-t border-border-weak-base pt-2">
-        <div class="flex flex-col gap-0.5">
-          {menuRow({
-            icon: <Icon name="settings-gear" size="small" />,
-            label: language.t("sidebar.fork.settings"),
-            keybind: props.settingsKeybind(),
-            onClick: props.onOpenSettings,
-          })}
-          {menuRow({
-            icon: <Icon name="help" size="small" />,
-            label: language.t("sidebar.help"),
-            onClick: props.onOpenHelp,
-          })}
+  return (
+    <div class="flex h-full w-full min-w-0 overflow-hidden">
+      <div
+        data-component="sidebar-rail"
+        class="w-16 shrink-0 bg-background-base flex flex-col items-center overflow-hidden"
+        onMouseMove={props.aimMove}
+      >
+        <div class="h-full min-h-0 w-full flex-1">
+          <DragDropProvider
+            onDragStart={props.handleDragStart}
+            onDragEnd={props.handleDragEnd}
+            onDragOver={props.handleDragOver}
+            collisionDetector={closestCenter}
+          >
+            <DragDropSensors />
+            <ConstrainDragXAxis />
+            <div class="h-full w-full flex flex-col items-center gap-3 px-3 py-3 overflow-y-auto no-scrollbar">
+              <SortableProvider ids={props.projects().map((project) => project.worktree)}>
+                <For each={props.projects()}>{(project) => props.renderProject(project)}</For>
+              </SortableProvider>
+              <TooltipKeybind
+                placement={placement()}
+                title={props.openProjectLabel}
+                keybind={props.openProjectKeybind() ?? ""}
+              >
+                <IconButton
+                  icon="plus"
+                  variant="ghost"
+                  size="large"
+                  onClick={props.onOpenProject}
+                  aria-label={props.openProjectLabel}
+                />
+              </TooltipKeybind>
+            </div>
+            <DragOverlay>{props.renderProjectOverlay()}</DragOverlay>
+          </DragDropProvider>
+        </div>
+        <div class="w-full shrink-0 flex flex-col items-center gap-2 pt-3 pb-6">
+          <TooltipKeybind placement={placement()} title={language.t("sidebar.fork.settings")} keybind={props.settingsKeybind() ?? ""}>
+            <IconButton
+              icon="settings-gear"
+              variant="ghost"
+              size="large"
+              onClick={props.onOpenSettings}
+              aria-label={language.t("sidebar.fork.settings")}
+            />
+          </TooltipKeybind>
+          <Tooltip placement={placement()} value={language.t("sidebar.help")}>
+            <IconButton
+              icon="help"
+              variant="ghost"
+              size="large"
+              onClick={props.onOpenHelp}
+              aria-label={language.t("sidebar.help")}
+            />
+          </Tooltip>
+        </div>
+      </div>
+
+      <div
+        ref={(el) => {
+          panel = el
+        }}
+        classList={{ "flex-1 flex h-full min-h-0 min-w-0 overflow-hidden": true, "pointer-events-none": !expandedShell() }}
+        aria-hidden={!expandedShell()}
+      >
+        <div
+          class="flex flex-col box-border rounded-tl-[12px] px-3 border-l border-t border-border-weaker-base bg-background-base"
+          style={{ width: "100%" }}
+        >
+          {panelContent()}
         </div>
       </div>
     </div>

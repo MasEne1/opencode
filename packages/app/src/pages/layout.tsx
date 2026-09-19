@@ -2224,11 +2224,24 @@ export default function LegacyLayout(props: ParentProps) {
     // remains available in ./layout/sidebar-shell for reference.
     <SidebarFork
       mobile={mobile}
+      opened={() => layout.sidebar.opened()}
+      aimMove={aim.move}
       projects={projects}
       currentProject={currentProject}
       currentSessions={currentSessions}
       ctx={workspaceSidebarCtx}
       sortNow={sortNow}
+      renderProject={(project) => (
+        <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile={mobile} />
+      )}
+      handleDragStart={handleDragStart}
+      handleDragEnd={handleDragEnd}
+      handleDragOver={handleDragOver}
+      renderProjectOverlay={projectOverlay}
+      openProjectLabel={language.t("command.project.open")}
+      openProjectKeybind={() => command.keybind("project.open")}
+      onOpenProject={chooseProject}
+      onOpenProjectDirectory={(project) => void navigateToProject(project.worktree)}
       onNewSession={() => {
         const dir = currentProject()?.worktree
         if (!dir) return
@@ -2240,8 +2253,6 @@ export default function LegacyLayout(props: ParentProps) {
       }}
       onOpenSearch={() => command.show()}
       searchKeybind={() => command.keybind("command.palette") || undefined}
-      onOpenProject={chooseProject}
-      onOpenProjectDirectory={(project) => void navigateToProject(project.worktree)}
       onOpenSettings={openSettings}
       settingsKeybind={() => command.keybind("settings.open") || undefined}
       onOpenHelp={() => platform.openExternal("https://opencode.ai/desktop-feedback")}
