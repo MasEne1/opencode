@@ -26,9 +26,9 @@ export function WorkspaceLeftDock(): JSX.Element {
   }
 
   return (
-    <div class="flex h-full min-h-0 w-full" style={{ width: "340px" }}>
+    <div class="flex h-full min-h-0 w-[560px] shrink-0">
       <div
-        class="h-full min-h-0 w-[220px] shrink-0 overflow-y-auto no-scrollbar border-e border-border-weaker-base"
+        class="h-full min-h-0 w-[240px] shrink-0 overflow-y-auto no-scrollbar border-e border-border-weaker-base"
         data-component="workspace-file-tree"
       >
         <FileTreeV2
@@ -64,8 +64,15 @@ export function WorkspaceLeftDock(): JSX.Element {
               <Show when={state()?.loaded}>
                 {(() => {
                   const path = selected()!
-                  const content = file.get(path)?.content
-                  const contents = typeof content === "string" ? content : ""
+                  const raw = file.get(path)?.content
+                  const contents = typeof raw === "string" ? raw : (typeof raw?.content === "string" ? raw.content : "")
+                  if (raw?.type === "binary") {
+                    return (
+                      <div class="px-4 py-3 text-12-regular text-text-weak">
+                        {language.t("workspace.binaryFile")}
+                      </div>
+                    )
+                  }
                   return (
                     <div class="relative pb-40">
                       <Dynamic
