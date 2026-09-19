@@ -2459,6 +2459,16 @@ export type FilesListOutput = {
   readonly data: ReadonlyArray<{ readonly path: string; readonly type: "file" | "directory" }>
 }
 
+export type FilesWriteInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly path: { readonly path: string; readonly content: string }["path"]
+  readonly content: { readonly path: string; readonly content: string }["content"]
+}
+
+export type FilesWriteOutput = void
+
 export type FilesFindInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined

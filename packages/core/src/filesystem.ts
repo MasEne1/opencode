@@ -29,6 +29,12 @@ export const ListInput = Schema.Struct({
 })
 export type ListInput = typeof ListInput.Type
 
+export const WriteInput = Schema.Struct({
+  path: RelativePath,
+  content: Schema.String,
+})
+export type WriteInput = typeof WriteInput.Type
+
 export { FindInput }
 
 export class GlobInput extends Schema.Class<GlobInput>("FileSystem.GlobInput")({
@@ -52,6 +58,7 @@ export interface Interface {
   readonly find: (input: FindInput) => Effect.Effect<Entry[]>
   readonly glob: (input: GlobInput) => Effect.Effect<readonly Entry[]>
   readonly grep: (input: GrepInput) => Effect.Effect<readonly Match[]>
+  readonly write: (input: WriteInput) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/FileSystem") {}
@@ -75,6 +82,10 @@ const baseLayer = Layer.effect(
       find: search.find,
       glob: search.glob,
       grep: search.grep,
+      write: Effect.fn("FileSystem.write")(function* (input) {
+        const target = yield* resolve(input.path)
+        yield* fs.writeFileString(target.real, input.content).pipe(Effect.orDie)
+      }),
       read: Effect.fn("FileSystem.read")(function* (input) {
         const target = yield* resolve(input.path)
         const info = yield* fs.stat(target.real).pipe(Effect.orDie)

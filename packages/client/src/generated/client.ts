@@ -79,6 +79,8 @@ import type {
   PermissionsReplyOutput,
   FilesListInput,
   FilesListOutput,
+  FilesWriteInput,
+  FilesWriteOutput,
   FilesFindInput,
   FilesFindOutput,
   CommandsListInput,
@@ -764,6 +766,19 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [401, 400],
             empty: false,
+          },
+          requestOptions,
+        ),
+      write: (input: FilesWriteInput, requestOptions?: RequestOptions) =>
+        request<FilesWriteOutput>(
+          {
+            method: "POST",
+            path: `/api/fs/write`,
+            query: { location: input["location"] },
+            body: { path: input["path"], content: input["content"] },
+            successStatus: 204,
+            declaredStatuses: [401, 400],
+            empty: true,
           },
           requestOptions,
         ),

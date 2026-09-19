@@ -1937,6 +1937,7 @@ export type Config = {
   default_agent?: string
   subagent_depth?: number
   username?: string
+  file_encoding?: string
   mode?: {
     build?: AgentConfig
     plan?: AgentConfig
@@ -12853,6 +12854,43 @@ export type V2FsListResponses = {
 }
 
 export type V2FsListResponse = V2FsListResponses[keyof V2FsListResponses]
+
+export type V2FsWriteData = {
+  body: {
+    path: string
+    content: string
+  }
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/fs/write"
+}
+
+export type V2FsWriteErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2FsWriteError = V2FsWriteErrors[keyof V2FsWriteErrors]
+
+export type V2FsWriteResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2FsWriteResponse = V2FsWriteResponses[keyof V2FsWriteResponses]
 
 export type V2FsFindData = {
   body?: never

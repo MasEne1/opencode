@@ -47,6 +47,24 @@ export const FileSystemGroup = HttpApiGroup.make("server.fs")
       ),
   )
   .add(
+    HttpApiEndpoint.post("fs.write", "/api/fs/write", {
+      query: LocationQuery,
+      payload: Schema.Struct({
+        path: RelativePath,
+        content: Schema.String,
+      }),
+      success: HttpApiSchema.NoContent,
+    })
+      .annotateMerge(locationQueryOpenApi)
+      .annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.fs.write",
+          summary: "Write file",
+          description: "Write one file relative to the requested location.",
+        }),
+      ),
+  )
+  .add(
     HttpApiEndpoint.get("fs.find", "/api/fs/find", {
       query: FindQuery,
       success: Location.response(Schema.Array(FileSystem.Entry)),
