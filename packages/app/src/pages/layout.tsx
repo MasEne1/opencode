@@ -82,6 +82,7 @@ import {
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
 import { SidebarContent } from "./layout/sidebar-shell"
+import { SidebarFork } from "./layout/sidebar-fork"
 
 export default function LegacyLayout(props: ParentProps) {
   const serverSDK = useServerSDK()
@@ -2219,29 +2220,31 @@ export default function LegacyLayout(props: ParentProps) {
   const projects = () => layout.projects.list()
   const projectOverlay = () => <ProjectDragOverlay projects={projects} activeProject={() => store.activeProject} />
   const sidebarContent = (mobile?: boolean) => (
-    <SidebarContent
+    // Fork sidebar redesign. The upstream SidebarContent (icon rail + panel)
+    // remains available in ./layout/sidebar-shell for reference.
+    <SidebarFork
       mobile={mobile}
-      opened={() => layout.sidebar.opened()}
-      aimMove={aim.move}
       projects={projects}
-      renderProject={(project) => (
-        <SortableProject ctx={projectSidebarCtx} project={project} sortNow={sortNow} mobile={mobile} />
-      )}
-      handleDragStart={handleDragStart}
-      handleDragEnd={handleDragEnd}
-      handleDragOver={handleDragOver}
-      openProjectLabel={language.t("command.project.open")}
-      openProjectKeybind={() => command.keybind("project.open")}
+      currentProject={currentProject}
+      currentSessions={currentSessions}
+      ctx={workspaceSidebarCtx}
+      sortNow={sortNow}
+      onNewSession={() => {
+        const dir = currentProject()?.worktree
+        if (!dir) return
+        navigateWithSidebarReset(`/${base64Encode(dir)}/session`)
+      }}
+      newTaskKeybind={() => {
+        const parts = command.keybindParts("tab.new")
+        return parts[parts.length - 1] || undefined
+      }}
+      onOpenSearch={() => command.show()}
+      searchKeybind={() => command.keybind("command.palette") || undefined}
       onOpenProject={chooseProject}
-      renderProjectOverlay={projectOverlay}
-      settingsLabel={() => language.t("sidebar.settings")}
-      settingsKeybind={() => command.keybind("settings.open")}
+      onOpenProjectDirectory={(project) => void navigateToProject(project.worktree)}
       onOpenSettings={openSettings}
-      helpLabel={() => language.t("sidebar.help")}
+      settingsKeybind={() => command.keybind("settings.open") || undefined}
       onOpenHelp={() => platform.openExternal("https://opencode.ai/desktop-feedback")}
-      renderPanel={() =>
-        mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
-      }
     />
   )
 
