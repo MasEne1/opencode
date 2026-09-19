@@ -492,6 +492,35 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                   </Button>
                 </TooltipKeybind>
                 <TooltipKeybind
+                  placement="bottom"
+                  title={language.t("command.review.toggle")}
+                  keybind={command.keybind("review.toggle")}
+                >
+                  <Button
+                    variant="ghost"
+                    class="group/review-toggle titlebar-icon w-8 h-6 p-0 box-border"
+                    onClick={() => command.trigger("review.toggle")}
+                    aria-label={language.t("command.review.toggle")}
+                  >
+                    <Icon size="small" name="review" />
+                  </Button>
+                </TooltipKeybind>
+                <TooltipKeybind
+                  placement="bottom"
+                  title={language.t("command.fileTree.toggle")}
+                  keybind={command.keybind("fileTree.toggle")}
+                >
+                  <Button
+                    variant="ghost"
+                    class="group/filetree-toggle titlebar-icon w-8 h-6 p-0 box-border"
+                    onClick={() => layout.fileTree.toggle()}
+                    aria-label={language.t("command.fileTree.toggle")}
+                    aria-expanded={layout.fileTree.opened()}
+                  >
+                    <Icon size="small" name={layout.fileTree.opened() ? "file-tree-active" : "file-tree"} />
+                  </Button>
+                </TooltipKeybind>
+                <TooltipKeybind
                   class="hidden xl:flex shrink-0 ml-1"
                   placement="bottom"
                   title={language.t("command.workspace.view")}
