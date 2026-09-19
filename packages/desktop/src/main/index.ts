@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdirSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, rmSync } from "node:fs"
 import * as http from "node:http"
 import { createServer } from "node:net"
 import { homedir, tmpdir } from "node:os"
@@ -121,6 +121,18 @@ const main = Effect.gen(function* () {
   } catch {}
 
   process.env.OPENCODE_DISABLE_EMBEDDED_WEB_UI = "true"
+
+  // Portable data takeover: if a `data` folder sits next to the portable exe,
+  // all opencode data (sessions, auth, config) lives inside it and travels
+  // with the exe. Otherwise the standard per-user location is used, which
+  // inherits any existing opencode data on the machine.
+  const portableDir = process.env.PORTABLE_EXECUTABLE_DIR
+  if (portableDir) {
+    const portableData = join(portableDir, "data")
+    if (existsSync(portableData)) {
+      process.env.XDG_DATA_HOME = portableData
+    }
+  }
 
   const appId = app.isPackaged ? APP_IDS[CHANNEL] : "ai.opencode.desktop.dev"
   const onboardingTestRoot = ((): string | undefined => {
