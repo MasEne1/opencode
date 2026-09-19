@@ -6,3 +6,4 @@ Usage:
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
+- Encoding: existing files are written back in the encoding they were detected with (BOM, UTF-8 validity, or the project's `file_encoding` fallback in opencode.json); new files are created in the fallback encoding. Do not work around non-UTF-8 files with shell commands — configure `file_encoding` instead.

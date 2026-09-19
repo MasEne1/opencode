@@ -4,6 +4,7 @@ import { makeLocationNode } from "./effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
 import { dirname } from "path"
 import { KeyedMutex } from "./effect/keyed-mutex"
+import { Encoding } from "./encoding"
 import { FSUtil } from "./fs-util"
 
 export interface Target {
@@ -55,8 +56,8 @@ export interface Interface {
   /** Create without replacing an existing target. */
   readonly create: (input: WriteInput) => Effect.Effect<WriteResult, TargetExistsError | FSUtil.Error>
   readonly write: (input: WriteInput) => Effect.Effect<WriteResult, FSUtil.Error>
-  /** Write text while retaining an existing UTF-8 BOM and emitting at most one BOM. */
-  readonly writeTextPreservingBom: (input: TextWriteInput) => Effect.Effect<WriteResult, FSUtil.Error>
+  /** Write text in the source encoding, retaining an existing UTF-8 BOM and emitting at most one BOM. */
+  readonly writeTextEncoded: (input: TextWriteInput & { source: Encoding.Source }) => Effect.Effect<WriteResult, FSUtil.Error>
   /** Commit only if an existing target still has the expected bytes. */
   readonly writeIfUnchanged: (
     input: ConditionalWriteInput,
@@ -105,20 +106,23 @@ const layer = Layer.effect(
       ),
     )
 
-    const writeTextPreservingBom = Effect.fn("FileMutation.writeTextPreservingBom")((input: TextWriteInput) =>
-      withTargetLock(input.target)(
-        Effect.gen(function* () {
-          const next = splitBom(input.content)
-          const current = yield* fs
-            .readFile(input.target.canonical)
-            .pipe(Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(undefined)))
-          yield* fs.writeWithDirs(
-            input.target.canonical,
-            joinBom(next.text, Boolean(current && hasUtf8Bom(current)) || next.bom),
-          )
-          return writeResult(input.target, current !== undefined)
-        }),
-      ),
+    const writeTextEncoded = Effect.fn("FileMutation.writeTextEncoded")(
+      (input: TextWriteInput & { source: Encoding.Source }) =>
+        withTargetLock(input.target)(
+          Effect.gen(function* () {
+            const stripped = input.content.replace(/^\uFEFF+/, "")
+            const hadBom = stripped.length !== input.content.length
+            const current = yield* fs
+              .readFile(input.target.canonical)
+              .pipe(Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(undefined)))
+            const bytes = yield* Encoding.encodeText(stripped, {
+              encoding: input.source.encoding,
+              bom: Boolean(current && hasUtf8Bom(current)) || input.source.bom || hadBom,
+            })
+            yield* fs.writeWithDirs(input.target.canonical, bytes)
+            return writeResult(input.target, current !== undefined)
+          }),
+        ),
     )
 
     const create = Effect.fn("FileMutation.create")((input: WriteInput) =>
@@ -168,19 +172,9 @@ const layer = Layer.effect(
       ),
     )
 
-    return Service.of({ create, write, writeTextPreservingBom, writeIfUnchanged, remove })
+    return Service.of({ create, write, writeTextEncoded, writeIfUnchanged, remove })
   }),
 )
-
-function splitBom(text: string) {
-  const stripped = text.replace(/^\uFEFF+/, "")
-  return { bom: stripped.length !== text.length, text: stripped }
-}
-
-function joinBom(text: string, bom: boolean) {
-  const stripped = splitBom(text).text
-  return bom ? `\uFEFF${stripped}` : stripped
-}
 
 function hasUtf8Bom(content: Uint8Array) {
   return content[0] === 0xef && content[1] === 0xbb && content[2] === 0xbf

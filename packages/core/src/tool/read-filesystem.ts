@@ -4,6 +4,7 @@ import path from "path"
 import { pathToFileURL } from "url"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { FileSystem } from "../filesystem"
+import { Encoding } from "../encoding"
 import { FSUtil } from "../fs-util"
 import { makeLocationNode } from "../effect/app-node"
 import { AbsolutePath, PositiveInt, RelativePath } from "../schema"
@@ -38,7 +39,7 @@ export class MalformedUtf8Error extends Schema.TaggedErrorClass<MalformedUtf8Err
   resource: Schema.String,
 }) {
   override get message() {
-    return `File is not valid UTF-8: ${this.resource}`
+    return `File is not valid UTF-8: ${this.resource}. Set "file_encoding" in opencode.json to work with files in other encodings.`
   }
 }
 
@@ -96,6 +97,7 @@ export interface Interface {
     path: AbsolutePath,
     resource: string,
     page?: PageInput,
+    fallback?: string,
   ) => Effect.Effect<FileSystem.Content | TextPage, ReadError>
   readonly list: (path: AbsolutePath, page?: PageInput) => Effect.Effect<ListPage, FSUtil.Error>
 }
@@ -173,6 +175,7 @@ export const read = Effect.fn("ReadTool.read")(function* (
   input: string,
   resource: string,
   page: PageInput = {},
+  fallback = "utf-8",
 ) {
   const real = yield* fs.realPath(input)
   return yield* Effect.scoped(
@@ -211,6 +214,42 @@ export const read = Effect.fn("ReadTool.read")(function* (
       }
       if (startsWith(first, [0x25, 0x50, 0x44, 0x46]) || extensions.has(path.extname(resource).toLowerCase()))
         return yield* Effect.fail(new BinaryFileError({ resource }))
+      const detected = Encoding.detect(first, fallback)
+      if (detected.encoding !== "utf-8") {
+        const maximumBytes = MAX_READ_BYTES * 4
+        if (Number(info.size) > maximumBytes)
+          return yield* Effect.fail(new MediaIngestLimitError({ resource, maximumBytes }))
+        const parts = [first]
+        let total = first.length
+        while (total < Number(info.size)) {
+          const chunk = yield* file.readAlloc(64 * 1024)
+          if (Option.isNone(chunk)) break
+          parts.push(chunk.value)
+          total += chunk.value.length
+        }
+        const bytes = Buffer.concat(
+          parts.map((chunk) => Buffer.from(chunk)),
+          total,
+        )
+        const text = yield* Encoding.decodeText(bytes, detected)
+        const offset = page.offset ?? 1
+        const limit = Math.min(page.limit ?? MAX_READ_LINES, MAX_READ_LINES)
+        const all = text.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line))
+        if (all.length > 0 && all[all.length - 1] === "") all.pop()
+        const selected = all.slice(offset - 1, offset - 1 + limit).map((line) =>
+          line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + MAX_LINE_SUFFIX : line,
+        )
+        if (selected.length === 0 && offset !== 1) return yield* Effect.fail(new OffsetOutOfRangeError({ offset }))
+        const next = offset - 1 + selected.length < all.length ? offset + selected.length : undefined
+        return new TextPage({
+          type: "text-page",
+          content: selected.join("\n"),
+          mime: FSUtil.mimeType(real),
+          offset,
+          truncated: next !== undefined,
+          ...(next === undefined ? {} : { next }),
+        })
+      }
       const paged = info.size > MAX_READ_BYTES || page.offset !== undefined || page.limit !== undefined
       if (!paged) {
         if (binary(resource, first)) return yield* Effect.fail(new BinaryFileError({ resource }))
@@ -357,7 +396,7 @@ const layer = Layer.effect(
     const fs = yield* FSUtil.Service
     return Service.of({
       inspect: (path) => inspect(fs, path),
-      read: (path, resource, page) => read(fs, path, resource, page),
+      read: (path, resource, page, fallback) => read(fs, path, resource, page, fallback),
       list: (path, page) => list(fs, path, page),
     })
   }),

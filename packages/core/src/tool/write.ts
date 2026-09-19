@@ -9,7 +9,10 @@ export * as WriteTool from "./write"
 import { ToolFailure } from "@opencode-ai/llm"
 import { Effect, Layer, Schema } from "effect"
 import { makeLocationNode } from "../effect/app-node"
+import { Config } from "../config"
+import { Encoding } from "../encoding"
 import { FileMutation } from "../file-mutation"
+import { FSUtil } from "../fs-util"
 import { LocationMutation } from "../location-mutation"
 import { PermissionV2 } from "../permission"
 import { ToolRegistry } from "./registry"
@@ -49,14 +52,16 @@ const layer = Layer.effectDiscard(
     const tools = yield* Tools.Service
     const mutation = yield* LocationMutation.Service
     const files = yield* FileMutation.Service
+    const fs = yield* FSUtil.Service
     const permission = yield* PermissionV2.Service
+    const config = yield* Config.Service
 
     yield* tools
       .register({
         [name]: Tool.withPermission(
           Tool.make({
             description:
-              "Write content to one file. Relative paths resolve within the active Location. Absolute paths inside the Location are accepted. Explicit external absolute paths require external_directory approval before edit approval.",
+              "Write content to one file. Relative paths resolve within the active Location. Absolute paths inside the Location are accepted. Explicit external absolute paths require external_directory approval before edit approval. Existing files are written back in the encoding they were detected with (BOM, UTF-8 validity, or the configured file_encoding fallback); new files are created in the fallback encoding.",
             input: Input,
             output: Output,
             toModelOutput: ({ output }) => [{ type: "text", text: toModelOutput(output) }],
@@ -84,8 +89,25 @@ const layer = Layer.effectDiscard(
                   agent: context.agent,
                   source,
                 })
-                return yield* files.writeTextPreservingBom({ target, content: input.content })
-              }).pipe(Effect.mapError(() => new ToolFailure({ message: `Unable to write ${input.path}` }))),
+                const fallback = Config.latest(yield* config.entries(), "file_encoding") ?? "utf-8"
+                const current = yield* fs
+                  .readFile(target.canonical)
+                  .pipe(Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(undefined)))
+                const detected = current ? Encoding.detect(current, fallback) : undefined
+                if (detected && !detected.valid)
+                  return yield* new ToolFailure({
+                    message: `File is not valid UTF-8: ${target.resource}. Set "file_encoding" in opencode.json to write files in other encodings.`,
+                  })
+                return yield* files.writeTextEncoded({
+                  target,
+                  content: input.content,
+                  source: detected ?? { encoding: fallback, bom: false },
+                })
+              }).pipe(
+                Effect.mapError((error) =>
+                  error instanceof ToolFailure ? error : new ToolFailure({ message: `Unable to write ${input.path}` }),
+                ),
+              ),
           }),
           "edit",
         ),
@@ -97,5 +119,5 @@ const layer = Layer.effectDiscard(
 export const node = makeLocationNode({
   name: "tool/write",
   layer,
-  deps: [ToolRegistry.node, LocationMutation.node, FileMutation.node, PermissionV2.node],
+  deps: [ToolRegistry.node, LocationMutation.node, FileMutation.node, FSUtil.node, Config.node, PermissionV2.node],
 })

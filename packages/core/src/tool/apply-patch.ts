@@ -5,6 +5,8 @@ import { FileDiff } from "@opencode-ai/schema/file-diff"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { Effect, Layer, Schema } from "effect"
 import { makeLocationNode } from "../effect/app-node"
+import { Config } from "../config"
+import { Encoding } from "../encoding"
 import { FileMutation } from "../file-mutation"
 import { FSUtil } from "../fs-util"
 import { LocationMutation } from "../location-mutation"
@@ -51,7 +53,7 @@ type Prepared =
   | (Extract<Patch.Hunk, { readonly type: "update" }> & {
       readonly target: LocationMutation.Target
       readonly source: Uint8Array
-      readonly content: string
+      readonly content: Uint8Array
       readonly before: string
       readonly after: string
     })
@@ -63,13 +65,14 @@ const layer = Layer.effectDiscard(
     const files = yield* FileMutation.Service
     const fs = yield* FSUtil.Service
     const permission = yield* PermissionV2.Service
+    const config = yield* Config.Service
 
     yield* tools
       .register({
         [name]: Tool.withPermission(
           Tool.make({
             description:
-              "Apply one patch containing add, update, and delete file operations. All targets are resolved and approved before target contents are read. Operations apply sequentially; if a later operation fails, earlier operations remain applied and the failure reports them explicitly. Moves and atomic rollback are not supported yet.",
+              "Apply one patch containing add, update, and delete file operations. All targets are resolved and approved before target contents are read. Operations apply sequentially; if a later operation fails, earlier operations remain applied and the failure reports them explicitly. Moves and atomic rollback are not supported yet. Files are decoded per read (BOM, UTF-8 validity, or the configured file_encoding fallback) and written back in the encoding they were loaded with.",
             input: Input,
             output: Output,
             toModelOutput: ({ output }) => [{ type: "text", text: toModelOutput(output) }],
@@ -123,6 +126,7 @@ const layer = Layer.effectDiscard(
                 })
 
                 const prepared: Prepared[] = []
+                const fallback = Config.latest(yield* config.entries(), "file_encoding") ?? "utf-8"
                 for (const { hunk, target } of targets) {
                   yield* Effect.gen(function* () {
                     if (hunk.type === "add") {
@@ -137,7 +141,12 @@ const layer = Layer.effectDiscard(
                     }
                     if ((yield* fs.stat(target.canonical)).type !== "File") yield* fail(hunk.path)
                     const source = yield* fs.readFile(target.canonical)
-                    const original = new TextDecoder("utf-8", { ignoreBOM: true }).decode(source)
+                    const detected = Encoding.detect(source, fallback)
+                    if (!detected.valid)
+                      return yield* new ToolFailure({
+                        message: `File is not valid UTF-8: ${target.resource}. Set "file_encoding" in opencode.json to edit files in other encodings.`,
+                      })
+                    const original = yield* Encoding.decodeText(source, detected)
                     const before = original.replace(/^\uFEFF/, "")
                     if (hunk.type === "delete") {
                       prepared.push({ ...hunk, target, before, after: "" })
@@ -148,11 +157,18 @@ const layer = Layer.effectDiscard(
                       ...hunk,
                       target,
                       source,
-                      content: Patch.joinBom(update.content, update.bom),
+                      content: yield* Encoding.encodeText(update.content, {
+                        encoding: detected.encoding,
+                        bom: update.bom,
+                      }),
                       before,
                       after: update.content,
                     })
-                  }).pipe(Effect.mapError(() => fail(hunk.path)))
+                  }).pipe(
+                    Effect.mapError((error) =>
+                      error instanceof ToolFailure ? error : fail(hunk.path),
+                    ),
+                  )
                 }
 
                 const patchFiles = prepared.map(patchFile)
@@ -163,10 +179,7 @@ const layer = Layer.effectDiscard(
                       if (change.type === "add") {
                         const result = yield* files.create({
                           target: change.target,
-                          content:
-                            change.contents.endsWith("\n") || change.contents === ""
-                              ? change.contents
-                              : `${change.contents}\n`,
+                          content: yield* Encoding.encodeText(change.after, { encoding: fallback, bom: false }),
                         })
                         applied.push({ type: change.type, resource: result.resource, target: result.target })
                         return
@@ -199,7 +212,7 @@ const layer = Layer.effectDiscard(
 export const node = makeLocationNode({
   name: "tool/apply-patch",
   layer,
-  deps: [ToolRegistry.node, LocationMutation.node, FileMutation.node, FSUtil.node, PermissionV2.node],
+  deps: [ToolRegistry.node, LocationMutation.node, FileMutation.node, FSUtil.node, Config.node, PermissionV2.node],
 })
 
 function patchFile(change: Prepared): typeof FileDiff.Info.Type {

@@ -86,7 +86,7 @@ describe("util.encoding", () => {
     it.effect("detects utf-8 BOM", () =>
       Effect.sync(() => {
         const bytes = encode("\ufeffhello", "utf-8")
-        expect(Encoding.detect(bytes)).toEqual({ encoding: "utf-8", bom: true })
+        expect(Encoding.detect(bytes)).toEqual({ encoding: "utf-8", bom: true, valid: true })
       }),
     )
 
@@ -95,26 +95,28 @@ describe("util.encoding", () => {
         expect(Encoding.detect(new Uint8Array([0xff, 0xfe, 0x61, 0x00]))).toEqual({
           encoding: "utf-16le",
           bom: true,
+          valid: true,
         })
         expect(Encoding.detect(new Uint8Array([0xfe, 0xff, 0x00, 0x61]))).toEqual({
           encoding: "utf-16be",
           bom: true,
+          valid: true,
         })
       }),
     )
 
     it.effect("detects valid utf-8 without BOM", () =>
       Effect.sync(() => {
-        expect(Encoding.detect(encode("你好 utf-8", "utf-8"))).toEqual({ encoding: "utf-8", bom: false })
-        expect(Encoding.detect(new Uint8Array([0x61, 0x62]))).toEqual({ encoding: "utf-8", bom: false })
+        expect(Encoding.detect(encode("你好 utf-8", "utf-8"))).toEqual({ encoding: "utf-8", bom: false, valid: true })
+        expect(Encoding.detect(new Uint8Array([0x61, 0x62]))).toEqual({ encoding: "utf-8", bom: false, valid: true })
       }),
     )
 
     it.effect("falls back to the configured encoding for non utf-8 bytes", () =>
       Effect.sync(() => {
         const gbk = encode("你好世界", "gbk")
-        expect(Encoding.detect(gbk, "gbk")).toEqual({ encoding: "gbk", bom: false })
-        expect(Encoding.detect(gbk)).toEqual({ encoding: "utf-8", bom: false })
+        expect(Encoding.detect(gbk, "gbk")).toEqual({ encoding: "gbk", bom: false, valid: true })
+        expect(Encoding.detect(gbk)).toEqual({ encoding: "utf-8", bom: false, valid: false })
       }),
     )
 
@@ -122,7 +124,7 @@ describe("util.encoding", () => {
       Effect.sync(() => {
         const full = encode("你好世界", "utf-8")
         const cut = full.slice(0, full.length - 1)
-        expect(Encoding.detect(cut)).toEqual({ encoding: "utf-8", bom: false })
+        expect(Encoding.detect(cut)).toEqual({ encoding: "utf-8", bom: false, valid: true })
       }),
     )
   })

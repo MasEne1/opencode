@@ -57,6 +57,10 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   username: Schema.String.pipe(Schema.optional).annotate({
     description: "Username displayed in conversations and used for telemetry identity",
   }),
+  file_encoding: Schema.String.pipe(Schema.optional).annotate({
+    description:
+      "Fallback encoding for files without a BOM that are not valid UTF-8, eg gbk, shift_jis, big5. Files are detected per read and written back in the encoding they were loaded with. New files are created in this encoding. Defaults to utf-8.",
+  }),
   permissions: Permission.Ruleset.pipe(Schema.optional).annotate({
     description: "Ordered tool permission rules applied to agent tool use",
   }),

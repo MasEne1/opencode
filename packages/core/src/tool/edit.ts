@@ -11,6 +11,8 @@ import { FileDiff } from "@opencode-ai/schema/file-diff"
 import { createTwoFilesPatch, diffLines } from "diff"
 import { Effect, Layer, Schema } from "effect"
 import { makeLocationNode } from "../effect/app-node"
+import { Config } from "../config"
+import { Encoding } from "../encoding"
 import { FileMutation } from "../file-mutation"
 import { FSUtil } from "../fs-util"
 import { LocationMutation } from "../location-mutation"
@@ -46,11 +48,6 @@ const convertToLineEnding = (text: string, ending: "\n" | "\r\n") =>
 
 const splitBom = (text: string) =>
   text.startsWith("\uFEFF") ? { bom: true, text: text.slice(1) } : { bom: false, text }
-const joinBom = (text: string, bom: boolean) => (bom ? `\uFEFF${text}` : text)
-const decodeUtf8 = (content: Uint8Array) => {
-  const bom = content[0] === 0xef && content[1] === 0xbb && content[2] === 0xbf
-  return { bom, content, text: new TextDecoder().decode(bom ? content.slice(3) : content) }
-}
 
 const countOccurrences = (content: string, search: string) => {
   if (search === "") return content.length + 1
@@ -94,13 +91,14 @@ const layer = Layer.effectDiscard(
     const files = yield* FileMutation.Service
     const fs = yield* FSUtil.Service
     const permission = yield* PermissionV2.Service
+    const config = yield* Config.Service
 
     yield* tools
       .register({
         [name]: Tool.withPermission(
           Tool.make({
             description:
-              "Replace exact text in one file. Relative paths resolve within the active Location. Absolute paths inside the Location are accepted. Explicit external absolute paths require external_directory approval before edit approval.",
+              "Replace exact text in one file. Relative paths resolve within the active Location. Absolute paths inside the Location are accepted. Explicit external absolute paths require external_directory approval before edit approval. Files are decoded per read (BOM, UTF-8 validity, or the configured file_encoding fallback) and written back in the encoding they were loaded with.",
             input: Input,
             output: Output,
             toModelOutput: ({ input, output }) => [
@@ -158,7 +156,16 @@ const layer = Layer.effectDiscard(
                     source: permissionSource,
                   }),
                 )
-                const source = decodeUtf8(yield* unableToEdit(fs.readFile(target.canonical)))
+                const fallback = Config.latest(yield* config.entries(), "file_encoding") ?? "utf-8"
+                const bytes = yield* unableToEdit(fs.readFile(target.canonical))
+                const detected = Encoding.detect(bytes, fallback)
+                if (!detected.valid) {
+                  return yield* new ToolFailure({
+                    message: `File is not valid UTF-8: ${target.resource}. Set "file_encoding" in opencode.json to edit files in other encodings.`,
+                  })
+                }
+                const decoded = splitBom(yield* unableToEdit(Encoding.decodeText(bytes, detected)))
+                const source = { ...decoded, content: bytes, bom: detected.bom || decoded.bom }
                 const ending = detectLineEnding(source.text)
                 const oldString = convertToLineEnding(input.oldString, ending)
                 const newString = convertToLineEnding(input.newString, ending)
@@ -188,11 +195,15 @@ const layer = Layer.effectDiscard(
                   { additions: 0, deletions: 0 },
                 )
                 const next = splitBom(replaced)
+                const content = yield* Encoding.encodeText(next.text, {
+                  encoding: detected.encoding,
+                  bom: source.bom || next.bom,
+                })
                 const result = yield* unableToEdit(
                   files.writeIfUnchanged({
                     target,
                     expected: source.content,
-                    content: joinBom(next.text, source.bom || next.bom),
+                    content,
                   }),
                 )
                 return {
@@ -219,5 +230,5 @@ const layer = Layer.effectDiscard(
 export const node = makeLocationNode({
   name: "tool/edit",
   layer,
-  deps: [ToolRegistry.node, LocationMutation.node, FileMutation.node, FSUtil.node, PermissionV2.node],
+  deps: [ToolRegistry.node, LocationMutation.node, FileMutation.node, FSUtil.node, Config.node, PermissionV2.node],
 })

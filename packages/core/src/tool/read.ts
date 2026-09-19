@@ -3,6 +3,7 @@ export * as ReadTool from "./read"
 import { ToolFailure } from "@opencode-ai/llm"
 import { Effect, Layer, Schema } from "effect"
 import { makeLocationNode } from "../effect/app-node"
+import { Config } from "../config"
 import { FileSystem } from "../filesystem"
 import { Image } from "../image"
 import { LocationMutation } from "../location-mutation"
@@ -34,12 +35,13 @@ const layer = Layer.effectDiscard(
     const mutation = yield* LocationMutation.Service
     const image = yield* Image.Service
     const permission = yield* PermissionV2.Service
+    const config = yield* Config.Service
 
     yield* tools
       .register({
         [name]: Tool.make({
           description:
-            "Read a text file or supported image, page through a large UTF-8 text file by line offset, or list a directory page. Relative paths resolve from the current location; absolute paths inside it are accepted, while external absolute paths require external_directory approval.",
+            "Read a text file or supported image, page through a large text file by line offset, or list a directory page. Relative paths resolve from the current location; absolute paths inside it are accepted, while external absolute paths require external_directory approval. Text files are decoded per read: a BOM (UTF-8 / UTF-16LE / UTF-16BE) is honored, valid UTF-8 is used as-is, and anything else uses the configured file_encoding fallback.",
           input: Input,
           output: Output,
           toModelOutput: ({ input, output }) => {
@@ -79,10 +81,15 @@ const layer = Layer.effectDiscard(
               })
               if (type === "directory")
                 return yield* reader.list(absolute, { offset: input.offset, limit: input.limit })
-              const content = yield* reader.read(absolute, resource, {
-                offset: input.offset,
-                limit: input.limit,
-              })
+              const content = yield* reader.read(
+                absolute,
+                resource,
+                {
+                  offset: input.offset,
+                  limit: input.limit,
+                },
+                Config.latest(yield* config.entries(), "file_encoding") ?? "utf-8",
+              )
               if ("encoding" in content && content.encoding === "base64" && SUPPORTED_IMAGE_MIMES.has(content.mime)) {
                 return yield* image
                   .normalize(resource, { ...content, encoding: "base64" })
@@ -96,6 +103,7 @@ const layer = Layer.effectDiscard(
                 const message =
                   error instanceof ReadToolFileSystem.BinaryFileError ||
                   error instanceof ReadToolFileSystem.MediaIngestLimitError ||
+                  error instanceof ReadToolFileSystem.MalformedUtf8Error ||
                   error instanceof Image.DecodeError ||
                   error instanceof Image.SizeError
                     ? error.message
@@ -113,5 +121,5 @@ const layer = Layer.effectDiscard(
 export const node = makeLocationNode({
   name: "tool/read",
   layer,
-  deps: [ToolRegistry.node, ReadToolFileSystem.node, LocationMutation.node, Image.node, PermissionV2.node],
+  deps: [ToolRegistry.node, ReadToolFileSystem.node, LocationMutation.node, Image.node, Config.node, PermissionV2.node],
 })
