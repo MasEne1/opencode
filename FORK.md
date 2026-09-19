@@ -16,6 +16,7 @@ This repository is a fork of [anomalyco/opencode](https://github.com/anomalyco/o
 | 6 | 桌面端侧边栏重设计（新建任务/搜索菜单 + 项目/时间分组标签页）| `feat(app): redesign sidebar with task menu and project/group tabs` | 参考自用工具布局 |
 | 7 | 侧边栏全窗口宽度常驻（断点 xl→lg，窄窗口不再隐藏）、默认展开、☰ 改为主侧边栏开关 | `feat(app): show sidebar from lg breakpoint instead of xl` / `fix(app): keep sidebar rail with redesigned fork panel` | 窄窗口体验 |
 | 8 | 移除会话页顶部重复的会话标题栏（与标题标签页重复）| `feat(app): remove duplicate session header bar` | 界面简化 |
+| 9 | 固定使用经典布局（含侧边栏），禁用上游默认的无侧边栏标签页布局 | 本文件所在提交 | 新版布局没有侧边栏，与二改方向冲突；Ctrl+B 恢复为侧边栏开关 |
 
 ## 与上游合并 / Upstream merge workflow
 

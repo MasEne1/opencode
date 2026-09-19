@@ -261,20 +261,9 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
       layoutTransitionState(!!sunset, layoutTransitionEligible(), oldInterfaceRetired(), newInterfaceNoticeDismissed()),
     )
     const newLayoutDesigns = createMemo(() => {
-      if (layoutUpgrade()) return true
-      if (!ready() && !oldInterfaceRetired()) return legacyNewLayoutDesignsDefault
-      if (!layoutTransitionClassified()) {
-        return resolveNewLayoutDesigns(
-          oldInterfaceRetired(),
-          store.general?.newLayoutDesigns,
-          legacyNewLayoutDesignsDefault,
-        )
-      }
-      return resolveNewLayoutDesigns(
-        oldInterfaceRetired(),
-        store.general?.newLayoutDesigns,
-        layoutTransitionEligible() ? legacyNewLayoutDesignsDefault : newLayoutDesignsDefault,
-      )
+      // Fork: always use the classic layout with the redesigned sidebar.
+      // The tab-strip layout has no sidebar, which this fork is built around.
+      return false
     })
     const visible = (preference: () => boolean) => createMemo(() => !newLayoutDesigns() || preference())
     const initializeAgentVisibility = (existing: boolean) => {
