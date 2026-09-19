@@ -33,6 +33,24 @@ type Tab = {
 }
 
 const langConf = new Compartment()
+
+// Contain the editor inside the dock with internal scrolling and explicit
+// dark colors so the app theme doesn't wash it out.
+const workspaceTheme = EditorView.theme({
+  "&": { height: "100%", backgroundColor: "transparent" },
+  ".cm-scroller": {
+    overflow: "auto",
+    fontFamily: "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
+    lineHeight: "1.6",
+  },
+  ".cm-gutters": {
+    backgroundColor: "transparent",
+    color: "#636d83",
+    border: "none",
+  },
+  ".cm-activeLine": { backgroundColor: "rgba(255, 255, 255, 0.04)" },
+  ".cm-content": { caretColor: "#abb2bf" },
+})
 const lineSeparator = String.fromCharCode(10)
 
 function languageExtensionFor(path: string): Extension {
@@ -126,6 +144,7 @@ export function WorkspaceLeftDock(): JSX.Element {
         extensions: [
           basicSetup,
           oneDark,
+          workspaceTheme,
           langConf.of([]),
           keymap.of([
             {
