@@ -1,4 +1,4 @@
-import { type ComponentProps, splitProps, Show } from "solid-js"
+import { type ComponentProps, splitProps, Show, createSignal } from "solid-js"
 
 const segmenter =
   typeof Intl !== "undefined" && "Segmenter" in Intl
@@ -31,24 +31,27 @@ export function Avatar(props: AvatarProps) {
     "style",
   ])
   const src = split.src // did this so i can zero it out to test fallback
+  // A remote src that fails to load must fall back to the letter, not an empty box.
+  const [failed, setFailed] = createSignal(false)
+  const showImage = () => Boolean(src) && !failed()
   return (
     <div
       {...rest}
       data-component="avatar"
       data-size={split.size || "normal"}
-      data-has-image={src ? "" : undefined}
+      data-has-image={showImage() ? "" : undefined}
       classList={{
         ...split.classList,
         [split.class ?? ""]: !!split.class,
       }}
       style={{
         ...(typeof split.style === "object" ? split.style : {}),
-        ...(!src && split.background ? { "--avatar-bg": split.background } : {}),
-        ...(!src && split.foreground ? { "--avatar-fg": split.foreground } : {}),
+        ...(!showImage() && split.background ? { "--avatar-bg": split.background } : {}),
+        ...(!showImage() && split.foreground ? { "--avatar-fg": split.foreground } : {}),
       }}
     >
-      <Show when={src} fallback={first(split.fallback)}>
-        {(src) => <img src={src()} draggable={false} data-slot="avatar-image" />}
+      <Show when={showImage()} fallback={first(split.fallback)}>
+        <img src={src} draggable={false} data-slot="avatar-image" onError={() => setFailed(true)} />
       </Show>
     </div>
   )

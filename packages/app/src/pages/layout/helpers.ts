@@ -86,8 +86,13 @@ export function homeSessionServerStatus(active: boolean, status: () => { working
 
 const OPENCODE_PROJECT_ID = "4b0ea68d7af9a6031a7ffda7ad66e0cb83315750"
 
+// Served from the bundled public/ directory. The previous remote URL
+// (https://opencode.ai/favicon.svg) is unreachable in some network
+// environments and left the avatar blank.
+export const OPENCODE_PROJECT_AVATAR = "/favicon-96x96-v3.png"
+
 export function getProjectAvatarSource(id?: string, icon?: { color?: string; url?: string; override?: string }) {
-  if (id === OPENCODE_PROJECT_ID) return "https://opencode.ai/favicon.svg"
+  if (id === OPENCODE_PROJECT_ID) return OPENCODE_PROJECT_AVATAR
   if (icon?.override) return icon.override
   if (icon?.color) return undefined
   return icon?.url
