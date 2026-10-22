@@ -5,6 +5,7 @@ import { pathToFileURL } from "url"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
 import { lookup } from "mime-types"
+import { Encoding } from "../encoding.js"
 import { Environment } from "../environment/index.js"
 import type { Files } from "../environment/index.js"
 import { FileSystem } from "../filesystem.js"
@@ -146,6 +147,53 @@ export const read = Effect.fn("ReadTool.read")(function* (
       encoding: "base64" as const,
       mime: media,
     }
+  }
+
+  const detected = yield* Encoding.detect(first.bytes)
+  if (detected.encoding !== "utf-8") {
+    const maximumBytes = MAX_READ_BYTES * 4
+    if (first.info.size > maximumBytes) return yield* new MediaIngestLimitError({ resource, maximumBytes })
+    const parts = [first.bytes]
+    let total = first.bytes.length
+    while (total < first.info.size) {
+      const chunk = yield* readFile(files, input, resource, { offset: total, length: FIRST_CHUNK })
+      if (chunk.bytes.length === 0) break
+      parts.push(chunk.bytes)
+      total += chunk.bytes.length
+    }
+    const text = yield* Encoding.decodeText(Buffer.concat(parts), detected)
+    const lines = text.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line))
+    if (lines.length > 0 && lines.at(-1) === "") lines.pop()
+    const offset = page.offset || 1
+    const limit = Math.min(page.limit || MAX_READ_LINES, MAX_READ_LINES)
+    const entries: string[] = []
+    let size = 0
+    let next: number | undefined
+    for (const [index, value] of lines.slice(offset - 1).entries()) {
+      const line = offset + index
+      if (entries.length >= limit || size >= MAX_READ_BYTES) {
+        next = line
+        break
+      }
+      const item = clampLine(value)
+      const lineSize = Buffer.byteLength(item, "utf-8") + (entries.length > 0 ? 1 : 0)
+      if (size + lineSize > MAX_READ_BYTES) {
+        next = line
+        break
+      }
+      entries.push(item)
+      size += lineSize
+    }
+    if (entries.length === 0 && offset !== 1)
+      return yield* new OffsetOutOfRangeError({ offset, lines: lines.length })
+    return new TextPage({
+      type: "text-page",
+      content: entries.join("\n"),
+      mime: mimeType(input),
+      offset,
+      truncated: next !== undefined,
+      ...(next === undefined ? {} : { next }),
+    })
   }
 
   const paged = first.info.size > MAX_READ_BYTES || page.offset !== undefined || page.limit !== undefined
