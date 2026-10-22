@@ -149,9 +149,10 @@ export const read = Effect.fn("ReadTool.read")(function* (
     }
   }
 
-  // Detection samples the first chunk, so a multi-byte sequence cut at its
-  // end is tolerated here; mutation tools detect on the whole file instead.
-  const detected = yield* Encoding.detect(first.bytes, { sample: true })
+  // Detection truncation tolerance applies only when the first chunk is
+  // actually cut short; a whole-file chunk detects strictly like the mutation
+  // tools, so read and edit agree on the same file.
+  const detected = yield* Encoding.detect(first.bytes, { sample: first.bytes.length < first.info.size })
   if (detected.encoding === "utf-16le" || detected.encoding === "utf-16be") {
     // UTF-16 newline units span two bytes, so the byte-rope pager cannot
     // locate lines; decode the whole file and page the string. BOM-less

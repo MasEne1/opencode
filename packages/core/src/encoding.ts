@@ -75,13 +75,16 @@ const SINGLE_BYTE_LABELS: Record<string, string> = {
   "windows-1252": "windows-1252",
   "iso-8859-1": "windows-1252",
   "iso-8859-2": "windows-1252",
+  "iso-8859-3": "windows-1252",
   "iso-8859-15": "windows-1252",
   cp850: "windows-1252",
   cp852: "windows-1252",
 }
 
 // More decoded control characters (excluding tab/newline) than this share
-// means the bytes are likely binary rather than legacy-encoded text.
+// means the bytes are likely binary rather than legacy-encoded text. The C1
+// range counts: real candidates map the high bytes to printable letters, so
+// C1 only appears through lossy mappings of undefined byte positions.
 const MAX_CONTROL_RATIO = 0.02
 
 function startsWith(bytes: Uint8Array, prefix: readonly number[]) {
@@ -99,9 +102,12 @@ function decodable(bytes: Uint8Array) {
 }
 
 // A valid multi byte UTF-8 sequence can be cut at the end of a truncated
-// sample, so retry without up to 3 trailing bytes (the longest sequence) before giving up.
-function validUtf8(bytes: Uint8Array) {
-  for (let cut = 0; cut <= 3; cut++) {
+// sample, so a sampled prefix retries without up to 3 trailing bytes (the
+// longest sequence) before giving up; a whole buffer must decode exactly, or
+// a legacy file whose bytes merely look UTF-8-ish after dropping its tail
+// would slip through and re-encode as replacement characters.
+function validUtf8(bytes: Uint8Array, truncate: boolean) {
+  for (let cut = 0; cut <= (truncate ? 3 : 0); cut++) {
     if (decodable(cut === 0 ? bytes : bytes.subarray(0, Math.max(0, bytes.length - cut)))) return true
   }
   return false
@@ -113,7 +119,7 @@ function plausible(text: string) {
   for (const character of text) {
     const code = character.codePointAt(0)!
     if (code === 9 || code === 10 || code === 13) continue
-    if (code < 32 || code === 127) control++
+    if (code < 32 || (code >= 127 && code < 160)) control++
   }
   return control / text.length <= MAX_CONTROL_RATIO
 }
@@ -152,11 +158,11 @@ export const detect = (
   options: { readonly sample?: boolean } = {},
 ): Effect.Effect<Source> =>
   Effect.promise(async () => {
+    const truncate = options.sample === true
     for (const prefix of BOM_PREFIXES)
       if (startsWith(bytes, prefix.bytes)) return { encoding: prefix.encoding, bom: true, valid: true }
-    if (validUtf8(bytes)) return { encoding: "utf-8", bom: false, valid: true }
+    if (validUtf8(bytes, truncate)) return { encoding: "utf-8", bom: false, valid: true }
     const [iconv, chardet] = await loadLegacy()
-    const truncate = options.sample === true
     // A lossless round-trip alone cannot separate gb18030 from big5,
     // shift_jis, or euc-kr because their byte ranges overlap, so the
     // statistical guess leads and the round-trip confirms it.

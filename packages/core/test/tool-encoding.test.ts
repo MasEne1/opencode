@@ -190,6 +190,23 @@ describe("Encoding", () => {
     }),
   )
 
+  // Whole-file detection must not retry UTF-8 validity without trailing
+  // bytes, or legacy bytes that only look UTF-8-ish after dropping the tail
+  // decode with replacement characters that the next edit writes back.
+  it.live("does not accept whole files as UTF-8 via trailing-byte retries", () =>
+    Effect.gen(function* () {
+      const gbk = yield* Encoding.detect(encode("注释\n", "gbk"))
+      expect(gbk.encoding).toBe("gb18030")
+      expect(gbk.valid).toBe(true)
+      expect(yield* Encoding.decodeText(encode("注释\n", "gbk"), gbk)).toBe("注释\n")
+      const cafe = yield* Encoding.detect(encode("café\n", "windows-1252"))
+      expect(cafe.encoding).toBe("windows-1252")
+      expect(cafe.valid).toBe(true)
+      // A genuinely truncated sample still tolerates the cut tail.
+      expect((yield* Encoding.detect(encode("café\n", "windows-1252"), { sample: true })).encoding).toBe("utf-8")
+    }),
+  )
+
   it.live("fails encoding when content is not representable", () =>
     Effect.gen(function* () {
       const source = yield* Encoding.detect(encode("function 設定() {\n  日本語テスト\n}\n", "shift_jis"))
