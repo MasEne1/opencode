@@ -132,6 +132,45 @@ describe("Encoding", () => {
     }),
   )
 
+  // A lossless round-trip cannot separate the overlapping CJK byte ranges, so
+  // detection leans on the statistical guess; each variant must come back as
+  // itself rather than collapsing into gb18030.
+  it.live("tells big5, shift_jis, and euc-kr apart", () =>
+    Effect.gen(function* () {
+      const samples: Array<[string, string]> = [
+        ["big5", "function 設定() {\n  繁體中文測試，設定檔案處理\n}\n"],
+        ["shift_jis", "function 設定() {\n  日本語テスト、設定ファイル\n}\n"],
+        ["euc-kr", "function config() {\n  한국어 테스트 파일 설정\n}\n"],
+      ]
+      for (const [encoding, text] of samples) {
+        const bytes = encode(text, encoding)
+        const source = yield* Encoding.detect(bytes)
+        expect(source.encoding).toBe(encoding)
+        expect(source.valid).toBe(true)
+        expect(yield* Encoding.decodeText(bytes, source)).toBe(text)
+        expect(Buffer.from(yield* Encoding.encodeText(text, source)).equals(Buffer.from(bytes))).toBe(true)
+      }
+    }),
+  )
+
+  it.live("marks a dangling trailing lead byte invalid for whole-file detection", () =>
+    Effect.gen(function* () {
+      const bytes = Buffer.concat([encode("function greet() {\n  你好世界\n}\n", "gbk"), Buffer.from([0x81])])
+      expect(yield* Encoding.detect(bytes)).toEqual({ encoding: "utf-8", bom: false, valid: false })
+      // A sampled prefix tolerates the truncated tail and still reads.
+      expect((yield* Encoding.detect(bytes, { sample: true })).encoding).toBe("gb18030")
+    }),
+  )
+
+  it.live("fails encoding when content is not representable", () =>
+    Effect.gen(function* () {
+      const source = yield* Encoding.detect(encode("function 設定() {\n  日本語テスト\n}\n", "shift_jis"))
+      const result = yield* Effect.flip(Encoding.encodeText("日本語テスト😀\n", source))
+      expect(result).toBeInstanceOf(Encoding.UnrepresentableError)
+      expect(result.message).toContain("shift_jis")
+    }),
+  )
+
   it.live("marks undecodable bytes as invalid", () =>
     Effect.gen(function* () {
       const junk = Uint8Array.from({ length: 64 }, (_, index) => (index % 2 === 0 ? 0x81 : 0xff))
@@ -195,6 +234,94 @@ describe("tool encoding", () => {
             expect(settled.status).toBe("error")
             expect(errorMessage(settled)).toContain("encoding")
             expect(Buffer.from(yield* Effect.promise(() => fs.readFile(target)))).toEqual(Buffer.from(junk))
+          }),
+        ),
+      )
+    }),
+  )
+
+  it.live("edits a big5 file and a shift_jis file in place without configuration", () =>
+    withTempDir((tmp) => {
+      const big5 = path.join(tmp.path, "big5.txt")
+      const sjis = path.join(tmp.path, "sjis.txt")
+      return Effect.promise(() =>
+        Promise.all([
+          fs.writeFile(big5, encode("function 設定() {\n  繁體中文測試，設定檔案處理\n}\n", "big5")),
+          fs.writeFile(sjis, encode("function 設定() {\n  日本語テスト、設定ファイル\n}\n", "shift_jis")),
+        ]),
+      ).pipe(
+        Effect.andThen(
+          withTools(tmp.path, (registry) =>
+            Effect.gen(function* () {
+              const big5Edit = yield* executeTool(
+                registry,
+                call("edit", { path: "big5.txt", oldString: "繁體中文測試", newString: "繁體中文修改" }, "call-b5-edit"),
+              )
+              expect(big5Edit.status).toBe("completed")
+              const sjisEdit = yield* executeTool(
+                registry,
+                call("edit", { path: "sjis.txt", oldString: "日本語テスト", newString: "日本語修正" }, "call-sjis-edit"),
+              )
+              expect(sjisEdit.status).toBe("completed")
+            }),
+          ),
+        ),
+        Effect.andThen(() =>
+          Effect.gen(function* () {
+            expect(decode(yield* Effect.promise(() => fs.readFile(big5)), "big5")).toBe(
+              "function 設定() {\n  繁體中文修改，設定檔案處理\n}\n",
+            )
+            expect(decode(yield* Effect.promise(() => fs.readFile(sjis)), "shift_jis")).toBe(
+              "function 設定() {\n  日本語修正、設定ファイル\n}\n",
+            )
+          }),
+        ),
+      )
+    }),
+  )
+
+  it.live("refuses to add characters the file encoding cannot represent", () =>
+    withTempDir((tmp) => {
+      const target = path.join(tmp.path, "sjis.txt")
+      const original = encode("function 設定() {\n  日本語テスト\n}\n", "shift_jis")
+      return Effect.promise(() => fs.writeFile(target, original)).pipe(
+        Effect.andThen(
+          withTools(tmp.path, (registry) =>
+            executeTool(
+              registry,
+              call("edit", { path: "sjis.txt", oldString: "日本語テスト", newString: "日本語テスト😀" }, "call-sjis-emoji"),
+            ),
+          ),
+        ),
+        Effect.andThen((settled) =>
+          Effect.gen(function* () {
+            expect(settled.status).toBe("error")
+            expect(errorMessage(settled)).toContain("cannot be written in shift_jis")
+            expect(Buffer.from(yield* Effect.promise(() => fs.readFile(target))).equals(original)).toBe(true)
+          }),
+        ),
+      )
+    }),
+  )
+
+  it.live("refuses to edit a file with a dangling trailing lead byte", () =>
+    withTempDir((tmp) => {
+      const target = path.join(tmp.path, "dangling.txt")
+      const original = Buffer.concat([encode("function greet() {\n  你好世界\n}\n", "gbk"), Buffer.from([0x81])])
+      return Effect.promise(() => fs.writeFile(target, original)).pipe(
+        Effect.andThen(
+          withTools(tmp.path, (registry) =>
+            executeTool(
+              registry,
+              call("edit", { path: "dangling.txt", oldString: "你好世界", newString: "再见世界" }, "call-dangling"),
+            ),
+          ),
+        ),
+        Effect.andThen((settled) =>
+          Effect.gen(function* () {
+            expect(settled.status).toBe("error")
+            expect(errorMessage(settled)).toContain("encoding")
+            expect(Buffer.from(yield* Effect.promise(() => fs.readFile(target))).equals(original)).toBe(true)
           }),
         ),
       )
@@ -304,7 +431,41 @@ describe("tool encoding", () => {
               if (paged.type !== "text-page") return
               expect(paged.content).toBe("第二行")
               expect(paged.next).toBe(3)
+              // A small whole-file read returns the shared file-content shape.
               const whole = yield* ReadToolFileSystem.read(environment.files, absolute, "gbk.txt")
+              expect(whole.type).toBe("file")
+              if (whole.type !== "file" || whole.encoding !== "utf8") return
+              expect(whole.content).toContain("第一行")
+              expect(whole.content).toContain("第三行")
+            }),
+          ),
+        ),
+      )
+    }),
+  )
+
+  it.live("pages a utf-16le file with BOM through the filesystem reader", () =>
+    withTempDir((tmp) => {
+      const target = path.join(tmp.path, "utf16le.txt")
+      const bytes = Buffer.concat([
+        Buffer.from([0xff, 0xfe]),
+        Buffer.from("第一行\n第二行\n第三行\n", "utf16le"),
+      ])
+      return Effect.promise(() => fs.writeFile(target, bytes)).pipe(
+        Effect.andThen(
+          withTools(tmp.path, () =>
+            Effect.gen(function* () {
+              const environment = yield* Environment.Service
+              const absolute = AbsolutePath.make(yield* Effect.promise(() => fs.realpath(target)))
+              const paged = yield* ReadToolFileSystem.read(environment.files, absolute, "utf16le.txt", {
+                offset: 2,
+                limit: 1,
+              })
+              expect(paged.type).toBe("text-page")
+              if (paged.type !== "text-page") return
+              expect(paged.content).toBe("第二行")
+              expect(paged.next).toBe(3)
+              const whole = yield* ReadToolFileSystem.read(environment.files, absolute, "utf16le.txt")
               expect(whole.type).toBe("text-page")
               if (whole.type !== "text-page") return
               expect(whole.content).toContain("第一行")

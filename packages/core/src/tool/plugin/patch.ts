@@ -310,7 +310,11 @@ export const Plugin = {
                 metadata: { files: output.files },
               })),
               Effect.mapError((error) =>
-                error instanceof ToolFailure ? error : new ToolFailure({ message: "Unable to apply patch", error }),
+                error instanceof ToolFailure
+                  ? error
+                  : error instanceof Encoding.UnrepresentableError
+                    ? new ToolFailure({ message: error.message })
+                    : new ToolFailure({ message: "Unable to apply patch", error }),
               ),
             )
           },

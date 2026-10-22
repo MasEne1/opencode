@@ -322,7 +322,9 @@ export const Plugin = {
               Effect.mapError((error) =>
                 error instanceof ToolFailure
                   ? error
-                  : new ToolFailure({ message: `Unable to edit ${input.path}`, error }),
+                  : error instanceof Encoding.UnrepresentableError
+                    ? new ToolFailure({ message: `${error.message} (${input.path})` })
+                    : new ToolFailure({ message: `Unable to edit ${input.path}`, error }),
               ),
             )
           },

@@ -1,13 +1,15 @@
 /**
  * Shared file-encoding detection and round-tripping for the file tools.
  * Detection: BOM (UTF-8 / UTF-16LE / UTF-16BE), then UTF-8 validity, then a
- * lossless decode/encode round-trip among common legacy encodings. A detected
- * legacy encoding always reproduces the original bytes exactly, so mutations
- * write back byte-safe even when a CJK variant is misidentified.
+ * statistical guess (jschardet) confirmed by a lossless decode/encode
+ * round-trip. A confirmed encoding always reproduces the original bytes
+ * exactly, so mutations write back byte-safe even when a CJK variant is
+ * misidentified; bytes no encoding reproduces are reported as invalid so
+ * mutation tools refuse them instead of corrupting them.
  */
 export * as Encoding from "./encoding.js"
 
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import { Bom } from "@opencode/util/bom"
 
 export interface Source {
@@ -15,7 +17,7 @@ export interface Source {
   readonly bom: boolean
   /**
    * False when the bytes are neither BOM-marked, valid UTF-8, nor losslessly
-   * round-trippable in any known encoding, meaning the decoded text is lossy
+   * round-trippable in a detected encoding, meaning the decoded text is lossy
    * and mutation tools must refuse to write it back. detect() always sets it;
    * hand-built sources (e.g. defaults for a new file) may omit it.
    */
@@ -25,16 +27,46 @@ export interface Source {
 export const split = Bom.split
 export const join = Bom.join
 
+export class UnrepresentableError extends Schema.TaggedError<UnrepresentableError>()(
+  "Encoding.UnrepresentableError",
+  {
+    encoding: Schema.String,
+  },
+) {
+  override get message() {
+    return `Content contains characters that cannot be written in ${this.encoding}`
+  }
+}
+
 const BOM_PREFIXES = [
   { encoding: "utf-8", bytes: [0xef, 0xbb, 0xbf] },
   { encoding: "utf-16le", bytes: [0xff, 0xfe] },
   { encoding: "utf-16be", bytes: [0xfe, 0xff] },
 ] as const
 
-// Tried in order after BOM and UTF-8 checks. gb18030 first: it round-trips
-// nearly every CJK byte stream, including its GBK subset, which makes it the
-// safest guess; a misdetected CJK variant still round-trips byte-exactly.
-const CANDIDATES = ["gb18030", "big5", "shift_jis", "euc-kr", "windows-1252"] as const
+// jschardet labels normalized to the encodings we round-trip and write with.
+const LABELS: Record<string, string> = {
+  gb18030: "gb18030",
+  gbk: "gb18030",
+  gb2312: "gb18030",
+  big5: "big5",
+  "big5-hkscs": "big5",
+  shift_jis: "shift_jis",
+  sjis: "shift_jis",
+  cp932: "shift_jis",
+  ms932: "shift_jis",
+  "windows-31j": "shift_jis",
+  "euc-kr": "euc-kr",
+  cp949: "euc-kr",
+  uhc: "euc-kr",
+  "ks_c_5601-1987": "euc-kr",
+  "euc-jp": "euc-jp",
+}
+
+// Single-byte encodings round-trip almost any byte stream, so only the
+// statistical label separates them; accept any iconv-supported label and let
+// the round-trip gate confirm it. BOM-less UTF is never guessed here.
+const SINGLE_BYTE = /^(windows-125\d|iso-8859-\d+|koi8-[ru]|ibm866)$/
 
 // More decoded control characters (excluding tab/newline) than this share
 // means the bytes are likely binary rather than legacy-encoded text.
@@ -74,17 +106,26 @@ function plausible(text: string) {
   return control / text.length <= MAX_CONTROL_RATIO
 }
 
-type Iconv = typeof import("iconv-lite")
-let iconv: Promise<Iconv> | undefined
+type Legacy = [typeof import("iconv-lite"), typeof import("jschardet")]
+let legacy: Promise<Legacy> | undefined
 // WHATWG TextEncoder only emits UTF-8 and the runtime TextDecoder cannot be
-// relied on for legacy encodings, so iconv-lite is loaded on first non-native use.
-const loadIconv = () => (iconv ??= import("iconv-lite"))
+// relied on for legacy encodings, so the heavy modules load only after BOM
+// and UTF-8 checks fail.
+const loadLegacy = () => (legacy ??= Promise.all([import("iconv-lite"), import("jschardet")] as const))
 
-function roundTrips(mod: Iconv, bytes: Uint8Array, encoding: string) {
+function normalize(label: string) {
+  const value = label.toLowerCase()
+  if (LABELS[value]) return LABELS[value]
+  if (SINGLE_BYTE.test(value)) return value
+  return undefined
+}
+
+function lossless(mod: Legacy[0], bytes: Uint8Array, encoding: string, truncate: boolean) {
   const buffer = Buffer.from(bytes)
-  // A truncated multi-byte sequence at the sample end can decode losslessly
-  // after dropping up to three trailing bytes, so retry before rejecting.
-  for (let cut = 0; cut <= 3; cut++) {
+  // A truncated multi-byte sequence at the end of a sampled prefix can decode
+  // losslessly after dropping up to 3 trailing bytes; whole-file detection
+  // must not, or a dangling lead byte would be written back as U+FFFD.
+  for (let cut = 0; cut <= (truncate ? 3 : 0); cut++) {
     const sample = cut === 0 ? buffer : buffer.subarray(0, Math.max(0, bytes.length - cut))
     const text = mod.decode(sample, encoding)
     if (text.includes("\uFFFD")) continue
@@ -94,14 +135,27 @@ function roundTrips(mod: Iconv, bytes: Uint8Array, encoding: string) {
   return false
 }
 
-export const detect = (bytes: Uint8Array): Effect.Effect<Source> =>
+export const detect = (
+  bytes: Uint8Array,
+  options: { readonly sample?: boolean } = {},
+): Effect.Effect<Source> =>
   Effect.promise(async () => {
     for (const prefix of BOM_PREFIXES)
       if (startsWith(bytes, prefix.bytes)) return { encoding: prefix.encoding, bom: true, valid: true }
     if (validUtf8(bytes)) return { encoding: "utf-8", bom: false, valid: true }
-    const mod = await loadIconv()
-    for (const encoding of CANDIDATES)
-      if (roundTrips(mod, bytes, encoding)) return { encoding, bom: false, valid: true }
+    const [iconv, chardet] = await loadLegacy()
+    const truncate = options.sample === true
+    // A lossless round-trip alone cannot separate gb18030 from big5,
+    // shift_jis, or euc-kr because their byte ranges overlap, so the
+    // statistical guess leads and the round-trip confirms it.
+    const guess = normalize(chardet.detect(bytes)?.encoding ?? "")
+    if (guess && lossless(iconv, bytes, guess, truncate)) return { encoding: guess, bom: false, valid: true }
+    const confirmed = ["gb18030", "big5", "shift_jis", "euc-kr"].filter(
+      (encoding) => encoding !== guess && lossless(iconv, bytes, encoding, truncate),
+    )
+    // More than one remaining candidate cannot be told apart reliably;
+    // report the bytes as invalid rather than risk a mixed-encoding write.
+    if (confirmed.length === 1) return { encoding: confirmed[0]!, bom: false, valid: true }
     return { encoding: "utf-8", bom: false, valid: false }
   })
 
@@ -110,15 +164,41 @@ export const decodeText = (bytes: Uint8Array, source: Source): Effect.Effect<str
     // Runtimes decode both utf-16 labels fine; the TS label union only lists "utf-16".
     return Effect.succeed(new TextDecoder(source.encoding as "utf-16").decode(bytes))
   if (source.encoding === "utf-8") return Effect.succeed(new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes))
-  return Effect.promise(() => loadIconv().then((mod) => mod.decode(Buffer.from(bytes), source.encoding)))
+  return Effect.promise(() => loadLegacy().then(([iconv]) => iconv.decode(Buffer.from(bytes), source.encoding)))
 }
 
-export const encodeText = (text: string, source: Source): Effect.Effect<Uint8Array> => {
-  const next = split(text)
+/**
+ * A synchronous page decoder for a detected source. Reads page raw byte
+ * ranges whose boundaries always sit after a newline byte, so each range is
+ * independently decodable. UTF-8 and UTF-16 strip a leading BOM like the
+ * runtime decoder.
+ */
+export const pageDecoder = (source: Source): Effect.Effect<(bytes: Uint8Array) => string> => {
+  if (source.encoding === "utf-8") return Effect.succeed((bytes) => new TextDecoder("utf-8").decode(bytes))
   if (source.encoding === "utf-16le" || source.encoding === "utf-16be")
-    return Effect.succeed(encodeUtf16(next.text, source.encoding))
-  if (source.encoding === "utf-8") return Effect.succeed(encodeUtf8(next.text, source.bom))
-  return Effect.promise(() => loadIconv().then((mod) => mod.encode(next.text, source.encoding)))
+    return Effect.succeed((bytes) => new TextDecoder(source.encoding as "utf-16").decode(bytes))
+  return Effect.promise(
+    () => loadLegacy().then(([iconv]) => (bytes: Uint8Array) => iconv.decode(Buffer.from(bytes), source.encoding)),
+  )
+}
+
+export const encodeText = (text: string, source: Source): Effect.Effect<Uint8Array, UnrepresentableError> => {
+  const stripped = split(text).text
+  return Effect.flatMap(encodeBytes(stripped, source), (bytes) =>
+    // iconv-lite silently turns characters the target encoding cannot hold
+    // into "?", and TextEncoder replaces lone surrogates with U+FFFD; verify
+    // the decode instead of corrupting the file.
+    Effect.flatMap(decodeText(bytes, source), (decoded) =>
+      split(decoded).text === stripped ? Effect.succeed(bytes) : new UnrepresentableError({ encoding: source.encoding }),
+    ),
+  )
+}
+
+const encodeBytes = (text: string, source: Source): Effect.Effect<Uint8Array> => {
+  if (source.encoding === "utf-16le" || source.encoding === "utf-16be")
+    return Effect.succeed(encodeUtf16(text, source.encoding))
+  if (source.encoding === "utf-8") return Effect.succeed(encodeUtf8(text, source.bom))
+  return Effect.promise(() => loadLegacy().then(([iconv]) => iconv.encode(text, source.encoding)))
 }
 
 function encodeUtf8(text: string, bom: boolean) {

@@ -35,11 +35,13 @@ export interface Interface {
   readonly withLock: (
     targets: ReadonlyArray<string>,
   ) => <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
-  readonly write: (input: WriteInput) => Effect.Effect<WriteResult, Environment.Failed>
+  readonly write: (
+    input: WriteInput,
+  ) => Effect.Effect<WriteResult, Environment.Failed | Encoding.UnrepresentableError>
   /** Write text in the given source encoding, stripping any leading BOM from the content and emitting at most one. */
   readonly writeText: (
     input: TextWriteInput & { readonly source: Encoding.Source },
-  ) => Effect.Effect<WriteResult, Environment.Failed>
+  ) => Effect.Effect<WriteResult, Environment.Failed | Encoding.UnrepresentableError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/FileMutation") {}
@@ -68,7 +70,6 @@ export const syncTextEncoding = Effect.fn("FileMutation.syncTextEncoding")(funct
   if (!Buffer.from(canonical).equals(current.bytes)) yield* files.write(target, canonical)
   return text
 })
-
 /** Share transaction locks across Location graphs that address the same file. */
 const transactionLocks = KeyedMutex.makeUnsafe<string>()
 
