@@ -64,9 +64,22 @@ const LABELS: Record<string, string> = {
 }
 
 // Single-byte encodings round-trip almost any byte stream, so only the
-// statistical label separates them; accept any iconv-supported label and let
-// the round-trip gate confirm it. BOM-less UTF is never guessed here.
-const SINGLE_BYTE = /^(windows-125\d|iso-8859-\d+|koi8-[ru]|ibm866)$/
+// statistical label separates them — and jschardet cannot reliably tell the
+// Latin code pages apart at low confidence. Collapse the Latin-script cluster
+// onto windows-1252 and refuse every other single-byte label (Cyrillic, Greek,
+// ...) rather than decode and write through a wrong code page. BOM-less UTF is
+// never guessed here.
+const SINGLE_BYTE_LABELS: Record<string, string> = {
+  "windows-1250": "windows-1252",
+  "windows-1252": "windows-1252",
+  "windows-1254": "windows-1252",
+  "iso-8859-1": "windows-1252",
+  "iso-8859-2": "windows-1252",
+  "iso-8859-9": "windows-1252",
+  "iso-8859-15": "windows-1252",
+  cp850: "windows-1252",
+  cp852: "windows-1252",
+}
 
 // More decoded control characters (excluding tab/newline) than this share
 // means the bytes are likely binary rather than legacy-encoded text.
@@ -116,7 +129,7 @@ const loadLegacy = () => (legacy ??= Promise.all([import("iconv-lite"), import("
 function normalize(label: string) {
   const value = label.toLowerCase()
   if (LABELS[value]) return LABELS[value]
-  if (SINGLE_BYTE.test(value)) return value
+  if (SINGLE_BYTE_LABELS[value]) return SINGLE_BYTE_LABELS[value]
   return undefined
 }
 

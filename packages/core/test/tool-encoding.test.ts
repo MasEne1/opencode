@@ -153,6 +153,27 @@ describe("Encoding", () => {
     }),
   )
 
+  // The Latin single-byte code pages are mutually indistinguishable, so any
+  // Latin label collapses onto windows-1252; other single-byte labels are
+  // refused rather than read or written through a wrong code page.
+  it.live("collapses Latin single-byte labels onto windows-1252 and refuses the rest", () =>
+    Effect.gen(function* () {
+      const western = encode("Résumé: café naïve façade über straße", "windows-1252")
+      expect(yield* Encoding.detect(western)).toEqual({ encoding: "windows-1252", bom: false, valid: true })
+      expect(yield* Encoding.decodeText(western, yield* Encoding.detect(western))).toBe(
+        "Résumé: café naïve façade über straße",
+      )
+      // Mostly-ASCII text with a single high byte is labeled cp852 by jschardet.
+      const sparse = encode("The quick brown fox — it works!", "windows-1252")
+      expect((yield* Encoding.detect(sparse)).encoding).toBe("windows-1252")
+      expect(yield* Encoding.detect(encode("Привет мир, тестирование кодировки", "windows-1251"))).toEqual({
+        encoding: "utf-8",
+        bom: false,
+        valid: false,
+      })
+    }),
+  )
+
   it.live("marks a dangling trailing lead byte invalid for whole-file detection", () =>
     Effect.gen(function* () {
       const bytes = Buffer.concat([encode("function greet() {\n  你好世界\n}\n", "gbk"), Buffer.from([0x81])])
