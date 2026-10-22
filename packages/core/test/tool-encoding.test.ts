@@ -154,9 +154,10 @@ describe("Encoding", () => {
   )
 
   // The Latin single-byte code pages are mutually indistinguishable, so any
-  // Latin label collapses onto windows-1252; other single-byte labels are
-  // refused rather than read or written through a wrong code page.
-  it.live("collapses Latin single-byte labels onto windows-1252 and refuses the rest", () =>
+  // western label collapses onto windows-1252; labels naming a
+  // language-specific code page are refused rather than read or written
+  // through a wrong code page.
+  it.live("collapses western single-byte labels onto windows-1252 and refuses the rest", () =>
     Effect.gen(function* () {
       const western = encode("Résumé: café naïve façade über straße", "windows-1252")
       expect(yield* Encoding.detect(western)).toEqual({ encoding: "windows-1252", bom: false, valid: true })
@@ -167,6 +168,12 @@ describe("Encoding", () => {
       const sparse = encode("The quick brown fox — it works!", "windows-1252")
       expect((yield* Encoding.detect(sparse)).encoding).toBe("windows-1252")
       expect(yield* Encoding.detect(encode("Привет мир, тестирование кодировки", "windows-1251"))).toEqual({
+        encoding: "utf-8",
+        bom: false,
+        valid: false,
+      })
+      // Turkish letters named by the label would decode as wrong Latin letters.
+      expect(yield* Encoding.detect(encode("şehir, ığdır, İstanbul", "windows-1254"))).toEqual({
         encoding: "utf-8",
         bom: false,
         valid: false,

@@ -65,17 +65,16 @@ const LABELS: Record<string, string> = {
 
 // Single-byte encodings round-trip almost any byte stream, so only the
 // statistical label separates them — and jschardet cannot reliably tell the
-// Latin code pages apart at low confidence. Collapse the Latin-script cluster
-// onto windows-1252 and refuse every other single-byte label (Cyrillic, Greek,
-// ...) rather than decode and write through a wrong code page. BOM-less UTF is
-// never guessed here.
+// Latin code pages apart at low confidence. Western text is mislabeled across
+// that cluster, so those labels collapse onto windows-1252; a label naming a
+// language-specific code page (Turkish windows-1254/iso-8859-9, Cyrillic,
+// Greek, ...) means its letters are present, and refusing beats decoding them
+// as wrong Latin letters. BOM-less UTF is never guessed here.
 const SINGLE_BYTE_LABELS: Record<string, string> = {
   "windows-1250": "windows-1252",
   "windows-1252": "windows-1252",
-  "windows-1254": "windows-1252",
   "iso-8859-1": "windows-1252",
   "iso-8859-2": "windows-1252",
-  "iso-8859-9": "windows-1252",
   "iso-8859-15": "windows-1252",
   cp850: "windows-1252",
   cp852: "windows-1252",
